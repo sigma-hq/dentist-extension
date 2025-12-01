@@ -389,6 +389,29 @@ async function loadSummaryData(container) {
         return;
       }
 
+      // Check if it's a "no appointment" case - treat as valid state, not error
+      if (response.status === 404) {
+        const errorBody = await response.json().catch(() => ({}));
+        const message = errorBody.detail || '';
+        if (message.toLowerCase().includes('no upcoming') || message.toLowerCase().includes('no appointment')) {
+          // Create a valid summary data structure with no appointment
+          summaryData = {
+            patient: currentPatient ? {
+              customer_identifier: currentPatient.displayId || '',
+              phone_number: ''
+            } : null,
+            appointment: null,
+            allergies: [],
+            past_medical_conditions: [],
+            consumed_items: [],
+            active_visit: null
+          };
+          setPatientLabel();
+          renderTabs(container);
+          return;
+        }
+      }
+
       const errorBody = await response.json().catch(() => ({}));
       const message = errorBody.detail || `Failed to load summary (HTTP ${response.status})`;
       container.innerHTML = renderErrorState(message);
@@ -542,21 +565,14 @@ function renderVisitTab(data) {
         ])}
       </div>
     `
-    : '';
-
-  const patientSection = patient
-    ? `
+    : `
       <div style="margin-top:12px;">
-        <h4 style="margin:0 0 8px 0;font-size:13px;color:#00695C;">Patient</h4>
-        ${createTable([
-          ['Identifier', patient.customer_identifier],
-          ['Phone', patient.phone_number || '—']
-        ])}
+        <h4 style="margin:0 0 8px 0;font-size:13px;color:#00695C;">Upcoming Appointment</h4>
+        <p style="color:#666;margin:0;">No upcoming appointment scheduled.</p>
       </div>
-    `
-    : '';
+    `;
 
-  return visitSection + appointmentSection + patientSection;
+  return visitSection + appointmentSection;
 }
 
 function renderAllergiesTab(allergies) {
