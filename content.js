@@ -241,7 +241,7 @@ function buildOverlayShell() {
   });
 
   overlay.querySelector('#dentist-settings-btn').addEventListener('click', () => {
-    chrome.runtime.sendMessage({ action: 'openOptions' });
+    renderSettings();
   });
 
   overlay.querySelector('#dentist-logout-btn').addEventListener('click', async () => {
@@ -322,7 +322,7 @@ function renderLogin(container) {
 
   container.querySelector('#dentist-open-settings').addEventListener('click', (e) => {
     e.preventDefault();
-    chrome.runtime.sendMessage({ action: 'openOptions' });
+    renderSettings();
   });
 
   container.querySelector('#dentist-login-form').addEventListener('submit', async (event) => {
@@ -449,16 +449,12 @@ function renderTabs(container) {
   }
 
   container.innerHTML = `
-    <div style="margin-bottom:12px;">
-      <div style="font-weight:700;font-size:14px;color:#004d40;">${summaryData?.patient?.full_name || 'Patient'}</div>
-      <div style="font-size:12px;color:#666;">${summaryData?.patient?.customer_identifier || ''}</div>
-    </div>
-    <div id="dentist-tabs" style="display:flex;border-bottom:1px solid #e0e0e0;background:#f6f6f6;border-radius:6px 6px 0 0;overflow:hidden;">
+    <div id="dentist-tabs" style="display:flex;border-bottom:1px solid #e0e0e0;background:#f5f5f5;">
       ${tabs
         .map(
           (tab, idx) => `
-            <button data-tab="${tab.id}" class="dentist-tab ${idx === 0 ? 'active' : ''}" style="flex:1;padding:10px;border:none;background:${idx === 0 ? '#fff' : 'transparent'};cursor:pointer;font-size:13px;font-weight:600;border-bottom:2px solid ${
-            idx === 0 ? '#00695C' : 'transparent'
+            <button data-tab="${tab.id}" class="dentist-tab ${idx === 0 ? 'active' : ''}" style="flex:1;padding:10px;border:none;background:${idx === 0 ? '#fff' : 'transparent'};cursor:pointer;font-size:13px;font-weight:500;border-bottom:2px solid ${
+            idx === 0 ? '#00897B' : 'transparent'
           };outline:none;">${tab.label}</button>
           `
         )
@@ -477,7 +473,7 @@ function renderTabs(container) {
       const isActive = btn.dataset.tab === tabId;
       btn.classList.toggle('active', isActive);
       btn.style.background = isActive ? '#fff' : 'transparent';
-      btn.style.borderBottomColor = isActive ? '#00695C' : 'transparent';
+      btn.style.borderBottomColor = isActive ? '#00897B' : 'transparent';
     });
 
     switch (tabId) {
@@ -656,6 +652,231 @@ function formatDateTime(value) {
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return value;
   return date.toLocaleString();
+}
+
+function renderSettings() {
+  const content = overlay?.querySelector('#dentist-content');
+  if (!content) return;
+
+  // Load current endpoint
+  chrome.storage.local.get(['apiEndpoint'], (result) => {
+    const currentEndpoint = result.apiEndpoint || 'http://localhost:8000';
+
+    content.innerHTML = `
+      <div style="padding: 0;">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
+          <h3 style="margin: 0; font-size: 14px; color: #00695C;">API Configuration</h3>
+          <button id="dentist-settings-back-btn" style="background: #f5f5f5; color: #333; border: 1px solid #ddd; padding: 6px 12px; border-radius: 4px; font-size: 12px; cursor: pointer;">Back</button>
+        </div>
+        
+        <form id="dentist-settings-form">
+          <div style="margin-bottom: 16px;">
+            <label style="display: block; margin-bottom: 8px; font-weight: 500; color: #333; font-size: 13px;">
+              API Endpoint Base URL
+            </label>
+            <input 
+              type="text" 
+              id="dentist-api-endpoint" 
+              value="${currentEndpoint}"
+              placeholder="http://localhost:8000 or https://192.168.1.169:8000"
+              style="width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 4px; font-size: 13px; box-sizing: border-box;"
+            />
+            <div id="dentist-endpoint-error" style="color: #c62828; font-size: 12px; margin-top: 5px; display: none;"></div>
+            <div style="font-size: 12px; color: #666; margin-top: 5px;">
+              Enter the base URL of your API server. Include the protocol (http:// or https://) and port if needed.
+              <br><br>
+              <strong>Examples:</strong>
+              <ul style="margin: 5px 0; padding-left: 20px;">
+                <li>http://localhost:8000</li>
+                <li>https://192.168.1.169:8000</li>
+                <li>https://api.example.com</li>
+              </ul>
+            </div>
+          </div>
+          
+          <div style="display: flex; gap: 8px;">
+            <button 
+              type="button"
+              id="dentist-test-connection-btn"
+              style="background: #fff; color: #00695C; border: 1px solid #00695C; padding: 10px 20px; border-radius: 4px; font-size: 13px; font-weight: 500; cursor: pointer; flex: 1;"
+            >
+              Test Connection
+            </button>
+            <button 
+              type="submit" 
+              style="background: #00695C; color: white; border: none; padding: 10px 20px; border-radius: 4px; font-size: 13px; font-weight: 500; cursor: pointer; flex: 1;"
+            >
+              Save Settings
+            </button>
+          </div>
+        </form>
+        
+        <div id="dentist-connection-status" style="padding: 12px; border-radius: 4px; margin-top: 16px; display: none; font-size: 13px;"></div>
+        
+        <div id="dentist-settings-success" style="background: #e8f5e9; color: #2e7d32; padding: 12px; border-radius: 4px; margin-top: 16px; display: none; font-size: 13px;">
+          Settings saved successfully!
+        </div>
+        
+        <div style="background: #e3f2fd; border-left: 4px solid #2196F3; padding: 12px; margin-top: 16px; border-radius: 4px; font-size: 12px; color: #1565C0;">
+          <strong>ℹ️ About Certificate Errors</strong>
+          <p style="margin: 5px 0 0 0;">
+            If you're using HTTPS with a self-signed certificate and seeing "ERR_CERT_AUTHORITY_INVALID" errors:
+          </p>
+          <ul style="margin: 5px 0; padding-left: 20px;">
+            <li>Click the certificate error in your browser's address bar</li>
+            <li>Select "Advanced" and then "Proceed to [site] (unsafe)"</li>
+            <li>This will allow the browser to accept the certificate for this session</li>
+            <li>For production, use a valid SSL certificate from a trusted authority</li>
+          </ul>
+        </div>
+      </div>
+    `;
+
+    // Add form submit handler
+    const form = content.querySelector('#dentist-settings-form');
+    const endpointInput = content.querySelector('#dentist-api-endpoint');
+    const errorDiv = content.querySelector('#dentist-endpoint-error');
+    const successDiv = content.querySelector('#dentist-settings-success');
+    const testBtn = content.querySelector('#dentist-test-connection-btn');
+    const connectionStatus = content.querySelector('#dentist-connection-status');
+    const backBtn = content.querySelector('#dentist-settings-back-btn');
+
+    // Back button handler
+    backBtn.addEventListener('click', () => {
+      if (summaryData) {
+        renderTabs(content);
+      } else {
+        renderOverlayForPatient();
+      }
+    });
+
+    // Test connection button handler
+    testBtn.addEventListener('click', async () => {
+      const endpoint = endpointInput.value.trim();
+
+      // Hide previous messages
+      errorDiv.style.display = 'none';
+      connectionStatus.style.display = 'none';
+
+      // Validate endpoint format
+      if (!endpoint) {
+        errorDiv.textContent = 'Please enter an API endpoint first';
+        errorDiv.style.display = 'block';
+        return;
+      }
+
+      try {
+        const url = new URL(endpoint);
+        if (!['http:', 'https:'].includes(url.protocol)) {
+          throw new Error('Invalid protocol');
+        }
+      } catch (err) {
+        errorDiv.textContent = 'Please enter a valid URL first';
+        errorDiv.style.display = 'block';
+        return;
+      }
+
+      // Show testing status
+      testBtn.disabled = true;
+      testBtn.textContent = 'Testing...';
+      connectionStatus.style.display = 'block';
+      connectionStatus.style.background = '#fff3e0';
+      connectionStatus.style.color = '#e65100';
+      connectionStatus.innerHTML = '⏳ Testing connection...';
+
+      try {
+        const baseUrl = endpoint.replace(/\/$/, '');
+        const testUrl = `${baseUrl}/api/dental-appointments/summary/by-patient-uuid/test/`;
+
+        console.log('[API] Calling endpoint: GET', testUrl);
+        console.log('[Settings] Testing connection to:', testUrl);
+        const response = await fetch(testUrl, {
+          method: 'GET',
+          headers: {
+            'Content-Type': 'application/json',
+          }
+        });
+
+        // If we get here, connection worked (even if 404, it means the server responded)
+        connectionStatus.style.background = '#e8f5e9';
+        connectionStatus.style.color = '#2e7d32';
+        connectionStatus.innerHTML = '✅ Connection successful! The endpoint is reachable.';
+
+      } catch (err) {
+        let statusMessage = '';
+        let statusColor = '#c62828';
+        let statusBg = '#ffebee';
+
+        if (err.message.includes('Failed to fetch') || err.message.includes('ERR_CERT_AUTHORITY_INVALID')) {
+          statusMessage = '❌ Certificate error detected. You need to accept the certificate in your browser first.';
+          statusMessage += '<br><br><strong>Solution:</strong> Open <a href="' + endpoint + '" target="_blank" style="color: #00695C; text-decoration: underline;">' + endpoint + '</a> in a new tab, accept the certificate warning, then try again.';
+        } else if (err.message.includes('CORS')) {
+          statusMessage = '⚠️ CORS error: The server may not allow requests from this origin.';
+        } else if (err.message.includes('ERR_CONNECTION_REFUSED')) {
+          statusMessage = '❌ Connection refused. Check if the server is running and the URL is correct.';
+        } else {
+          statusMessage = '❌ Connection failed: ' + err.message;
+        }
+
+        connectionStatus.style.background = statusBg;
+        connectionStatus.style.color = statusColor;
+        connectionStatus.innerHTML = statusMessage;
+      } finally {
+        testBtn.disabled = false;
+        testBtn.textContent = 'Test Connection';
+      }
+    });
+
+    form.addEventListener('submit', (e) => {
+      e.preventDefault();
+
+      const endpoint = endpointInput.value.trim();
+
+      // Hide previous messages
+      errorDiv.style.display = 'none';
+      successDiv.style.display = 'none';
+
+      // Validate endpoint
+      if (!endpoint) {
+        errorDiv.textContent = 'Please enter an API endpoint';
+        errorDiv.style.display = 'block';
+        return;
+      }
+
+      // Basic URL validation
+      try {
+        const url = new URL(endpoint);
+        if (!['http:', 'https:'].includes(url.protocol)) {
+          throw new Error('Protocol must be http:// or https://');
+        }
+      } catch (err) {
+        errorDiv.textContent = 'Please enter a valid URL (e.g., http://localhost:8000 or https://192.168.1.169:8000)';
+        errorDiv.style.display = 'block';
+        return;
+      }
+
+      // Save to storage
+      chrome.storage.local.set({ apiEndpoint: endpoint }, () => {
+        if (chrome.runtime.lastError) {
+          errorDiv.textContent = 'Error saving settings: ' + chrome.runtime.lastError.message;
+          errorDiv.style.display = 'block';
+        } else {
+          successDiv.style.display = 'block';
+          setTimeout(() => {
+            successDiv.style.display = 'none';
+          }, 3000);
+
+          // Optionally reload the patient data with new endpoint
+          if (currentPatient) {
+            console.log('Settings saved, reloading patient data with new endpoint...');
+            setTimeout(() => {
+              renderOverlayForPatient();
+            }, 500);
+          }
+        }
+      });
+    });
+  });
 }
 
 // =========================
