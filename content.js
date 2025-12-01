@@ -439,6 +439,7 @@ function renderTabs(container) {
   const showInsurance = summaryData?.active_visit?.mode_of_payment === 'insurance';
   const tabs = [
     { id: 'visit', label: 'Visit' },
+    { id: 'patient', label: 'Patient' },
     { id: 'allergies', label: 'Allergies' },
     { id: 'conditions', label: 'Past Medical Conditions' },
     { id: 'consumed', label: 'Items Consumed' }
@@ -480,6 +481,9 @@ function renderTabs(container) {
       case 'visit':
         tabContent.innerHTML = renderVisitTab(summaryData);
         break;
+      case 'patient':
+        tabContent.innerHTML = renderPatientTab(summaryData.active_visit?.patient_details || summaryData.patient);
+        break;
       case 'allergies':
         tabContent.innerHTML = renderAllergiesTab(summaryData.allergies || []);
         break;
@@ -490,7 +494,7 @@ function renderTabs(container) {
         tabContent.innerHTML = renderConsumedTab(summaryData.consumed_items || []);
         break;
       case 'insurance':
-        tabContent.innerHTML = renderInsuranceTab(summaryData.active_visit?.insurance_scheme);
+        tabContent.innerHTML = renderInsuranceTab(summaryData.active_visit?.insurance_scheme_details);
         break;
       default:
         tabContent.innerHTML = '<p style="color:#666;">No data</p>';
@@ -514,10 +518,11 @@ function renderVisitTab(data) {
       <div style="margin-bottom:12px;">
         <h4 style="margin:0 0 8px 0;font-size:13px;color:#00695C;">Active Visit</h4>
         ${createTable([
-          ['Type', visit.visit_type?.name || '—'],
+          ['Type', visit.visit_type_name || '—'],
           ['Status', formatStatus(visit.status)],
           ['Visit Date', formatDateTime(visit.visit_date)],
-          ['Mode of Payment', visit.mode_of_payment || '—'],
+          ['Mode of Payment', visit.mode_of_payment ? visit.mode_of_payment.charAt(0).toUpperCase() + visit.mode_of_payment.slice(1).toLowerCase() : '—'],
+          ['Clinic', visit.clinic_name && visit.clinic_code ? `${visit.clinic_name} (${visit.clinic_code})` : visit.clinic_name || '—'],
           ['Requires Pre-Authorization', visit.requires_pre_authorization ? 'Yes' : 'No']
         ])}
       </div>
@@ -637,6 +642,53 @@ function renderInsuranceTab(insurance) {
         ['Company', insurance.insurance_company_name || '—'],
         ['Membership Number', insurance.membership_number || '—'],
         ['Suffix', insurance.suffix || '—']
+      ])}
+    </div>
+  `;
+}
+
+function formatPhoneNumber(phone) {
+  if (!phone) return '—';
+  
+  const cleaned = phone.replace(/[^\d+]/g, '');
+  
+  if (cleaned.startsWith('+')) {
+    const countryCode = cleaned.substring(0, cleaned.length - 10);
+    const remaining = cleaned.substring(cleaned.length - 10);
+    const areaCode = remaining.substring(0, 3);
+    const firstPart = remaining.substring(3, 6);
+    const secondPart = remaining.substring(6, 10);
+    return `${countryCode} (${areaCode}) ${firstPart}-${secondPart}`;
+  }
+  
+  if (cleaned.length === 10) {
+    return `(${cleaned.substring(0, 3)}) ${cleaned.substring(3, 6)}-${cleaned.substring(6)}`;
+  }
+  
+  return phone;
+}
+
+function renderPatientTab(patient) {
+  if (!patient) {
+    return '<p style="color:#666;">No patient data available.</p>';
+  }
+
+  const dob = patient.dob ? new Date(patient.dob) : null;
+  const formattedPhone = formatPhoneNumber(patient.phone_number);
+  
+  return `
+    <div style="margin-bottom:12px;">
+      <h4 style="margin:0 0 8px 0;font-size:13px;color:#00695C;">Patient Details</h4>
+      ${createTable([
+        ['Full Name', patient.full_name || '—'],
+        ['Identifier', patient.customer_identifier || '—'],
+        ['Phone Number', formattedPhone],
+        ['Gender', patient.gender || '—'],
+        ['Date of Birth', dob ? dob.toLocaleDateString() : '—'],
+        ['Age', patient.age ? `${patient.age} years` : '—'],
+        ['DOB Estimated', patient.dob_is_estimated !== undefined ? (patient.dob_is_estimated ? 'Yes' : 'No') : '—'],
+        ['Synced to OpenMRS', patient.has_synced_to_openmrs !== undefined ? (patient.has_synced_to_openmrs ? 'Yes' : 'No') : '—'],
+        ['Status', patient.is_active !== undefined ? (patient.is_active ? 'Active' : 'Inactive') : '—']
       ])}
     </div>
   `;
