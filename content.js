@@ -182,8 +182,8 @@ function buildOverlayShell() {
   overlay.style.borderRadius = '10px';
   overlay.style.boxShadow = '0 4px 12px rgba(0,0,0,0.15)';
   overlay.style.fontFamily = 'system-ui, sans-serif';
-  overlay.style.minWidth = '620px';
-  overlay.style.maxWidth = '760px';
+  overlay.style.minWidth = '720px';
+  overlay.style.maxWidth = '880px';
   overlay.style.transition = 'all 0.3s ease';
   overlay.style.margin = '0 20px 20px 0';
 
@@ -465,7 +465,8 @@ function renderTabs(container) {
     { id: 'patient', label: 'Patient' },
     { id: 'allergies', label: 'Allergies' },
     { id: 'conditions', label: 'Past Medical Conditions' },
-    { id: 'consumed', label: 'Items Consumed' }
+    { id: 'consumed', label: 'Items Consumed' },
+    { id: 'treatments', label: 'Treatments' }
   ];
 
   if (showInsurance) {
@@ -518,6 +519,10 @@ function renderTabs(container) {
         break;
       case 'insurance':
         tabContent.innerHTML = renderInsuranceTab(summaryData.active_visit?.insurance_scheme_details);
+        break;
+      case 'treatments':
+        tabContent.innerHTML = renderTreatmentsTab(summaryData);
+        setupTreatmentForm(tabContent);
         break;
       default:
         tabContent.innerHTML = '<p style="color:#666;">No data</p>';
@@ -661,6 +666,307 @@ function renderInsuranceTab(insurance) {
       ])}
     </div>
   `;
+}
+
+function renderTreatmentsTab(data) {
+  const visit = data?.active_visit;
+  if (!visit || !visit.id) {
+    return '<p style="color:#666;">No active visit found. Please start a visit first.</p>';
+  }
+
+  return `
+    <div>
+      <h4 style="margin:0 0 12px 0;font-size:13px;color:#00695C;">Add Treatment</h4>
+      <form id="dentist-treatment-form" style="display:flex;flex-direction:column;gap:10px;max-width:100%;">
+        <!-- Minimal required fields -->
+        <div style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;">
+          <div>
+            <label style="display:block;margin-bottom:4px;font-size:12px;font-weight:500;color:#333;">Tooth Number *</label>
+            <input type="text" id="tooth_number" required placeholder="e.g., 14, 36" style="width:100%;padding:8px;border:1px solid #ddd;border-radius:4px;font-size:13px;box-sizing:border-box;" />
+          </div>
+          <div>
+            <label style="display:block;margin-bottom:4px;font-size:12px;font-weight:500;color:#333;">Treatment Date *</label>
+            <input type="date" id="treatment_date" required style="width:100%;padding:8px;border:1px solid #ddd;border-radius:4px;font-size:13px;box-sizing:border-box;" />
+          </div>
+          <div>
+            <label style="display:block;margin-bottom:4px;font-size:12px;font-weight:500;color:#333;">Procedure Name *</label>
+            <input type="text" id="procedure_name" required placeholder="e.g., Composite filling" style="width:100%;padding:8px;border:1px solid #ddd;border-radius:4px;font-size:13px;box-sizing:border-box;" />
+          </div>
+          <div>
+            <label style="display:block;margin-bottom:4px;font-size:12px;font-weight:500;color:#333;">Treatment Status *</label>
+            <select id="treatment_status" required style="width:100%;padding:8px;border:1px solid #ddd;border-radius:4px;font-size:13px;box-sizing:border-box;">
+              <option value="">Select status</option>
+              <option value="planned">Planned</option>
+              <option value="in_progress">In Progress</option>
+              <option value="completed">Completed</option>
+              <option value="cancelled">Cancelled</option>
+              <option value="failed">Failed</option>
+            </select>
+          </div>
+        </div>
+
+        <div>
+          <label style="display:block;margin-bottom:4px;font-size:12px;font-weight:500;color:#333;">Procedure Category *</label>
+          <select id="procedure_category" required style="width:100%;padding:8px;border:1px solid #ddd;border-radius:4px;font-size:13px;box-sizing:border-box;">
+            <option value="">Select category</option>
+            <option value="preventive">Preventive</option>
+            <option value="restorative">Restorative</option>
+            <option value="endodontic">Endodontic</option>
+            <option value="periodontic">Periodontic</option>
+            <option value="prosthodontic">Prosthodontic</option>
+            <option value="orthodontic">Orthodontic</option>
+            <option value="oral_surgery">Oral Surgery</option>
+            <option value="cosmetic">Cosmetic</option>
+            <option value="diagnostic">Diagnostic</option>
+            <option value="emergency">Emergency</option>
+            <option value="other">Other</option>
+          </select>
+        </div>
+
+        <!-- Advanced section toggle -->
+        <button type="button" id="toggle_advanced_treatment" style="background:#f5f5f5;color:#333;border:1px solid #ddd;padding:6px 10px;border-radius:4px;font-size:12px;font-weight:500;cursor:pointer;align-self:flex-start;margin-top:4px;">
+          Show additional details
+        </button>
+
+        <div id="advanced_treatment_section" style="display:none;margin-top:6px;padding:10px;border:1px solid #eee;border-radius:6px;background:#fafafa;max-height:220px;overflow:auto;">
+          <div style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;">
+            <div>
+              <label style="display:block;margin-bottom:4px;font-size:12px;font-weight:500;color:#333;">Numbering System</label>
+              <select id="numbering_system" style="width:100%;padding:8px;border:1px solid #ddd;border-radius:4px;font-size:13px;box-sizing:border-box;">
+                <option value="universal">Universal</option>
+                <option value="fdi">FDI</option>
+                <option value="palmer">Palmer</option>
+              </select>
+            </div>
+            <div>
+              <label style="display:block;margin-bottom:4px;font-size:12px;font-weight:500;color:#333;">Tooth Name</label>
+              <input type="text" id="tooth_name" placeholder="e.g., Lower left first molar" style="width:100%;padding:8px;border:1px solid #ddd;border-radius:4px;font-size:13px;box-sizing:border-box;" />
+            </div>
+            <div>
+              <label style="display:block;margin-bottom:4px;font-size:12px;font-weight:500;color:#333;">Tooth Type</label>
+              <select id="tooth_type" style="width:100%;padding:8px;border:1px solid #ddd;border-radius:4px;font-size:13px;box-sizing:border-box;">
+                <option value="">Select type</option>
+                <option value="incisor">Incisor</option>
+                <option value="canine">Canine</option>
+                <option value="premolar">Premolar</option>
+                <option value="molar">Molar</option>
+              </select>
+            </div>
+            <div>
+              <label style="display:block;margin-bottom:4px;font-size:12px;font-weight:500;color:#333;">Tooth Position</label>
+              <select id="tooth_position" style="width:100%;padding:8px;border:1px solid #ddd;border-radius:4px;font-size:13px;box-sizing:border-box;">
+                <option value="">Select position</option>
+                <option value="upper_right">Upper Right</option>
+                <option value="upper_left">Upper Left</option>
+                <option value="lower_right">Lower Right</option>
+                <option value="lower_left">Lower Left</option>
+              </select>
+            </div>
+            <div>
+              <label style="display:block;margin-bottom:4px;font-size:12px;font-weight:500;color:#333;">Surface</label>
+              <input type="text" id="surface" placeholder="e.g., MOD, O" style="width:100%;padding:8px;border:1px solid #ddd;border-radius:4px;font-size:13px;box-sizing:border-box;" />
+            </div>
+            <div>
+              <label style="display:block;margin-bottom:4px;font-size:12px;font-weight:500;color:#333;">Procedure Code</label>
+              <input type="text" id="procedure_code" placeholder="e.g., D3310" style="width:100%;padding:8px;border:1px solid #ddd;border-radius:4px;font-size:13px;box-sizing:border-box;" />
+            </div>
+            <div>
+              <label style="display:block;margin-bottom:4px;font-size:12px;font-weight:500;color:#333;">Estimated Cost</label>
+              <input type="number" id="estimated_cost" step="0.01" placeholder="0.00" style="width:100%;padding:8px;border:1px solid:#ddd;border-radius:4px;font-size:13px;box-sizing:border-box;" />
+            </div>
+            <div>
+              <label style="display:block;margin-bottom:4px;font-size:12px;font-weight:500;color:#333;">Actual Cost</label>
+              <input type="number" id="actual_cost" step="0.01" placeholder="0.00" style="width:100%;padding:8px;border:1px solid:#ddd;border-radius:4px;font-size:13px;box-sizing:border-box;" />
+            </div>
+          </div>
+
+          <div style="margin-top:8px;display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;">
+            <div style="grid-column:1 / -1;">
+              <label style="display:block;margin-bottom:4px;font-size:12px;font-weight:500;color:#333;">Notes</label>
+              <textarea id="notes" rows="2" placeholder="Additional notes..." style="width:100%;padding:8px;border:1px solid #ddd;border-radius:4px;font-size:13px;box-sizing:border-box;resize:vertical;"></textarea>
+            </div>
+            <div style="grid-column:1 / -1;">
+              <label style="display:block;margin-bottom:4px;font-size:12px;font-weight:500;color:#333;">Materials Used</label>
+              <textarea id="materials_used" rows="2" placeholder="e.g., Gutta-percha, sealer" style="width:100%;padding:8px;border:1px solid #ddd;border-radius:4px;font-size:13px;box-sizing:border-box;resize:vertical;"></textarea>
+            </div>
+            <div style="grid-column:1 / -1;">
+              <label style="display:block;margin-bottom:4px;font-size:12px;font-weight:500;color:#333;">Diagnosis</label>
+              <input type="text" id="diagnosis" placeholder="e.g., Irreversible pulpitis" style="width:100%;padding:8px;border:1px solid #ddd;border-radius:4px;font-size:13px;box-sizing:border-box;" />
+            </div>
+          </div>
+
+          <div style="margin-top:8px;">
+            <label style="display:flex;align-items:center;gap:8px;font-size:12px;font-weight:500;color:#333;">
+              <input type="checkbox" id="requires_follow_up" style="width:16px;height:16px;" />
+              Requires Follow Up
+            </label>
+          </div>
+
+          <div id="follow_up_section" style="display:none;margin-top:6px;">
+            <div>
+              <label style="display:block;margin-bottom:4px;font-size:12px;font-weight:500;color:#333;">Follow Up Date</label>
+              <input type="date" id="follow_up_date" style="width:100%;padding:8px;border:1px solid #ddd;border-radius:4px;font-size:13px;box-sizing:border-box;" />
+            </div>
+            <div style="margin-top:6px;">
+              <label style="display:block;margin-bottom:4px;font-size:12px;font-weight:500;color:#333;">Follow Up Notes</label>
+              <textarea id="follow_up_notes" rows="2" placeholder="Follow up notes..." style="width:100%;padding:8px;border:1px solid #ddd;border-radius:4px;font-size:13px;box-sizing:border-box;resize:vertical;"></textarea>
+            </div>
+          </div>
+        </div>
+
+        <div id="dentist-treatment-error" style="display:none;color:#c62828;font-size:12px;padding:8px;background:#ffebee;border-radius:4px;"></div>
+        <div id="dentist-treatment-success" style="display:none;color:#2e7d32;font-size:12px;padding:8px;background:#e8f5e9;border-radius:4px;"></div>
+
+        <button type="submit" style="background:#00695C;color:white;border:none;padding:10px 16px;border-radius:4px;font-size:13px;font-weight:600;cursor:pointer;margin-top:6px;align-self:flex-start;">Create Treatment</button>
+      </form>
+    </div>
+  `;
+}
+
+function setupTreatmentForm(container) {
+  const form = container.querySelector('#dentist-treatment-form');
+  const toggleAdvanced = container.querySelector('#toggle_advanced_treatment');
+  const advancedSection = container.querySelector('#advanced_treatment_section');
+  const requiresFollowUp = container.querySelector('#requires_follow_up');
+  const followUpSection = container.querySelector('#follow_up_section');
+  const errorDiv = container.querySelector('#dentist-treatment-error');
+  const successDiv = container.querySelector('#dentist-treatment-success');
+
+  // Toggle advanced section visibility
+  if (toggleAdvanced && advancedSection) {
+    toggleAdvanced.addEventListener('click', () => {
+      const isHidden = advancedSection.style.display === 'none' || !advancedSection.style.display;
+      advancedSection.style.display = isHidden ? 'block' : 'none';
+      toggleAdvanced.textContent = isHidden ? 'Hide additional details' : 'Show additional details';
+    });
+  }
+
+  // Toggle follow-up section visibility
+  if (requiresFollowUp && followUpSection) {
+    requiresFollowUp.addEventListener('change', (e) => {
+      followUpSection.style.display = e.target.checked ? 'block' : 'none';
+    });
+  }
+
+  // Set today's date as default for treatment_date
+  const treatmentDateInput = container.querySelector('#treatment_date');
+  if (treatmentDateInput) {
+    const today = new Date().toISOString().split('T')[0];
+    treatmentDateInput.value = today;
+  }
+
+  // Form submission handler
+  if (form) {
+    form.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      errorDiv.style.display = 'none';
+      successDiv.style.display = 'none';
+
+      const visitId = summaryData?.active_visit?.id;
+      if (!visitId) {
+        errorDiv.textContent = 'No active visit found.';
+        errorDiv.style.display = 'block';
+        return;
+      }
+
+      // Build payload
+      const payload = {
+        visit: visitId,
+        tooth_number: container.querySelector('#tooth_number').value.trim(),
+        procedure_name: container.querySelector('#procedure_name').value.trim(),
+        procedure_category: container.querySelector('#procedure_category').value,
+        treatment_status: container.querySelector('#treatment_status').value,
+        treatment_date: container.querySelector('#treatment_date').value
+      };
+
+      // Optional fields
+      const numberingSystem = container.querySelector('#numbering_system').value;
+      if (numberingSystem && numberingSystem !== 'universal') {
+        payload.numbering_system = numberingSystem;
+      }
+
+      const toothName = container.querySelector('#tooth_name')?.value.trim();
+      if (toothName) payload.tooth_name = toothName;
+
+      const toothType = container.querySelector('#tooth_type').value;
+      if (toothType) payload.tooth_type = toothType;
+
+      const toothPosition = container.querySelector('#tooth_position').value;
+      if (toothPosition) payload.tooth_position = toothPosition;
+
+      const surface = container.querySelector('#surface').value.trim();
+      if (surface) payload.surface = surface;
+
+      const notes = container.querySelector('#notes').value.trim();
+      if (notes) payload.notes = notes;
+
+      const materialsUsed = container.querySelector('#materials_used').value.trim();
+      if (materialsUsed) payload.materials_used = materialsUsed;
+
+      const diagnosis = container.querySelector('#diagnosis').value.trim();
+      if (diagnosis) payload.diagnosis = diagnosis;
+
+      const procedureCode = container.querySelector('#procedure_code').value.trim();
+      if (procedureCode) payload.procedure_code = procedureCode;
+
+      const estimatedCost = container.querySelector('#estimated_cost').value;
+      if (estimatedCost) payload.estimated_cost = parseFloat(estimatedCost);
+
+      const actualCost = container.querySelector('#actual_cost').value;
+      if (actualCost) payload.actual_cost = parseFloat(actualCost);
+
+      if (requiresFollowUp.checked) {
+        payload.requires_follow_up = true;
+        const followUpDate = container.querySelector('#follow_up_date').value;
+        if (followUpDate) payload.follow_up_date = followUpDate;
+        const followUpNotes = container.querySelector('#follow_up_notes').value.trim();
+        if (followUpNotes) payload.follow_up_notes = followUpNotes;
+      }
+
+      // Submit form
+      const submitBtn = form.querySelector('button[type="submit"]');
+      submitBtn.disabled = true;
+      submitBtn.textContent = 'Creating...';
+
+      try {
+        const baseUrl = await getApiEndpoint();
+        const url = `${baseUrl}/api/dental-treatments/`;
+        const response = await authenticatedFetch(url, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload)
+        });
+
+        if (!response.ok) {
+          const errorData = await response.json().catch(() => ({}));
+          throw new Error(errorData.detail || errorData.message || `Failed to create treatment (HTTP ${response.status})`);
+        }
+
+        const data = await response.json();
+        successDiv.textContent = 'Treatment created successfully!';
+        successDiv.style.display = 'block';
+
+        // Reset form
+        form.reset();
+        if (treatmentDateInput) {
+          const today = new Date().toISOString().split('T')[0];
+          treatmentDateInput.value = today;
+        }
+        followUpSection.style.display = 'none';
+
+        // Scroll to success message
+        successDiv.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+
+      } catch (err) {
+        errorDiv.textContent = err.message || 'Failed to create treatment. Please try again.';
+        errorDiv.style.display = 'block';
+        errorDiv.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+      } finally {
+        submitBtn.disabled = false;
+        submitBtn.textContent = 'Create Treatment';
+      }
+    });
+  }
 }
 
 function formatPhoneNumber(phone) {
