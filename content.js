@@ -465,7 +465,7 @@ function renderTabs(container) {
     { id: 'patient', label: 'Patient' },
     { id: 'allergies', label: 'Allergies' },
     { id: 'conditions', label: 'Past Medical Conditions' },
-    { id: 'consumed', label: 'Items Consumed' },
+    // { id: 'consumed', label: 'Items Consumed' }, // Hidden for now, will display later
     { id: 'treatments', label: 'Treatments' }
   ];
 
