@@ -654,7 +654,7 @@ function renderInsuranceTab(insurance) {
     <div>
       <h4 style="margin:0 0 8px 0;font-size:13px;color:#00695C;">Insurance</h4>
       ${createTable([
-        ['Scheme', insurance.insurance_scheme_name],
+        ['Scheme', insurance.scheme_name || '—'],
         ['Company', insurance.insurance_company_name || '—'],
         ['Membership Number', insurance.membership_number || '—'],
         ['Suffix', insurance.suffix || '—']
