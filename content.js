@@ -732,7 +732,7 @@ function renderTreatmentsTab(data) {
           <div style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;">
             <div>
               <label style="display:block;margin-bottom:4px;font-size:12px;font-weight:500;color:#333;">Numbering System</label>
-              <select id="numbering_system" style="width:100%;padding:8px;border:1px solid #ddd;border-radius:4px;font-size:13px;box-sizing:border-box;">
+              <select id="numbering_system" style="width:100%;padding:8px;border:1px solid #ddd;border-radius:4px;font-size:13px;box-sizing:border-box;height:36px;background:#fff;">
                 <option value="universal">Universal</option>
                 <option value="fdi">FDI</option>
                 <option value="palmer">Palmer</option>
@@ -744,7 +744,7 @@ function renderTreatmentsTab(data) {
             </div>
             <div>
               <label style="display:block;margin-bottom:4px;font-size:12px;font-weight:500;color:#333;">Tooth Type</label>
-              <select id="tooth_type" style="width:100%;padding:8px;border:1px solid #ddd;border-radius:4px;font-size:13px;box-sizing:border-box;">
+              <select id="tooth_type" style="width:100%;padding:8px;border:1px solid #ddd;border-radius:4px;font-size:13px;box-sizing:border-box;height:36px;background:#fff;">
                 <option value="">Select type</option>
                 <option value="incisor">Incisor</option>
                 <option value="canine">Canine</option>
@@ -754,7 +754,7 @@ function renderTreatmentsTab(data) {
             </div>
             <div>
               <label style="display:block;margin-bottom:4px;font-size:12px;font-weight:500;color:#333;">Tooth Position</label>
-              <select id="tooth_position" style="width:100%;padding:8px;border:1px solid #ddd;border-radius:4px;font-size:13px;box-sizing:border-box;">
+              <select id="tooth_position" style="width:100%;padding:8px;border:1px solid #ddd;border-radius:4px;font-size:13px;box-sizing:border-box;height:36px;background:#fff;">
                 <option value="">Select position</option>
                 <option value="upper_right">Upper Right</option>
                 <option value="upper_left">Upper Left</option>
