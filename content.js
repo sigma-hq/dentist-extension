@@ -682,19 +682,19 @@ function renderTreatmentsTab(data) {
         <div style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;">
           <div>
             <label style="display:block;margin-bottom:4px;font-size:12px;font-weight:500;color:#333;">Tooth Number *</label>
-            <input type="text" id="tooth_number" required placeholder="e.g., 14, 36" style="width:100%;padding:8px;border:1px solid #ddd;border-radius:4px;font-size:13px;box-sizing:border-box;" />
+            <input type="text" id="tooth_number" required placeholder="e.g., 14, 36" style="width:100%;padding:8px;border:1px solid #ddd;border-radius:4px;font-size:13px;box-sizing:border-box;height:36px;background:#fff;" />
           </div>
           <div>
             <label style="display:block;margin-bottom:4px;font-size:12px;font-weight:500;color:#333;">Treatment Date *</label>
-            <input type="date" id="treatment_date" required style="width:100%;padding:8px;border:1px solid #ddd;border-radius:4px;font-size:13px;box-sizing:border-box;" />
+            <input type="date" id="treatment_date" required style="width:100%;padding:8px;border:1px solid #ddd;border-radius:4px;font-size:13px;box-sizing:border-box;height:36px;background:#fff;" />
           </div>
           <div>
             <label style="display:block;margin-bottom:4px;font-size:12px;font-weight:500;color:#333;">Procedure Name *</label>
-            <input type="text" id="procedure_name" required placeholder="e.g., Composite filling" style="width:100%;padding:8px;border:1px solid #ddd;border-radius:4px;font-size:13px;box-sizing:border-box;" />
+            <input type="text" id="procedure_name" required placeholder="e.g., Composite filling" style="width:100%;padding:8px;border:1px solid #ddd;border-radius:4px;font-size:13px;box-sizing:border-box;height:36px;background:#fff;" />
           </div>
           <div>
             <label style="display:block;margin-bottom:4px;font-size:12px;font-weight:500;color:#333;">Treatment Status *</label>
-            <select id="treatment_status" required style="width:100%;padding:8px;border:1px solid #ddd;border-radius:4px;font-size:13px;box-sizing:border-box;">
+            <select id="treatment_status" required style="width:100%;padding:8px;border:1px solid #ddd;border-radius:4px;font-size:13px;box-sizing:border-box;height:36px;background:#fff;">
               <option value="">Select status</option>
               <option value="planned">Planned</option>
               <option value="in_progress">In Progress</option>
@@ -707,7 +707,7 @@ function renderTreatmentsTab(data) {
 
         <div>
           <label style="display:block;margin-bottom:4px;font-size:12px;font-weight:500;color:#333;">Procedure Category *</label>
-          <select id="procedure_category" required style="width:100%;padding:8px;border:1px solid #ddd;border-radius:4px;font-size:13px;box-sizing:border-box;">
+          <select id="procedure_category" required style="width:100%;padding:8px;border:1px solid #ddd;border-radius:4px;font-size:13px;box-sizing:border-box;height:36px;background:#fff;">
             <option value="">Select category</option>
             <option value="preventive">Preventive</option>
             <option value="restorative">Restorative</option>
