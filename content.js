@@ -16,6 +16,12 @@ const authTokens = {
 // =========================
 
 async function backgroundFetch(url, options = {}) {
+  console.log('[Dental] backgroundFetch REQUEST:', {
+    url,
+    method: options.method || 'GET',
+    headers: options.headers
+  });
+  
   return new Promise((resolve, reject) => {
     chrome.runtime.sendMessage(
       {
@@ -29,16 +35,25 @@ async function backgroundFetch(url, options = {}) {
       },
       (response) => {
         if (chrome.runtime.lastError) {
+          console.error('[Dental] backgroundFetch ERROR:', chrome.runtime.lastError.message);
           reject(new Error(chrome.runtime.lastError.message));
           return;
         }
         
         if (response.error) {
+          console.error('[Dental] backgroundFetch FAILED:', response);
           const error = new Error(response.message);
           error.name = response.name;
           reject(error);
           return;
         }
+        
+        console.log('[Dental] backgroundFetch RESPONSE:', {
+          url,
+          status: response.status,
+          ok: response.ok,
+          data: response.data
+        });
         
         // Create a response-like object
         resolve({
@@ -423,9 +438,22 @@ async function loadSummaryData(container) {
   try {
     const baseUrl = await getApiEndpoint();
     const url = `${baseUrl}/api/dental-appointments/summary/by-patient-uuid/${currentPatient.uuid}/`;
+    
+    console.log('[Dental] Fetching summary:', { url, patientUuid: currentPatient.uuid });
+    
     const response = await authenticatedFetch(url, { method: 'GET' });
 
+    console.log('[Dental] Response:', {
+      url,
+      status: response.status,
+      statusText: response.statusText,
+      ok: response.ok,
+      data: response.data
+    });
+
     if (!response.ok) {
+      console.log('[Dental] Response not OK:', response.status);
+      
       if (response.status === 401) {
         await clearAuthTokens();
         setAuthUiState(false);
@@ -435,6 +463,7 @@ async function loadSummaryData(container) {
 
       // Treat 404 as "no dental data found" - this is a valid state, not an error
       if (response.status === 404) {
+        console.log('[Dental] 404 - No dental data found for patient');
         summaryData = {
           patient: currentPatient ? {
             customer_identifier: currentPatient.displayId || '',
@@ -452,16 +481,18 @@ async function loadSummaryData(container) {
       }
 
       const errorBody = await response.json().catch(() => ({}));
+      console.log('[Dental] Error body:', errorBody);
       const message = errorBody.detail || `Failed to load summary (HTTP ${response.status})`;
       container.innerHTML = renderErrorState(message);
       return;
     }
 
     summaryData = await response.json();
-    console.log('[Dental] Summary response:', summaryData);
+    console.log('[Dental] Summary data loaded:', summaryData);
     setPatientLabel();
     renderTabs(container);
   } catch (err) {
+    console.error('[Dental] Error loading summary:', err);
     container.innerHTML = renderErrorState(err.message || 'Unable to reach the server.');
   }
 }
