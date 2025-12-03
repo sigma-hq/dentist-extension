@@ -12,6 +12,65 @@ const authTokens = {
 };
 
 // =========================
+// Background Fetch Helper (bypasses mixed content and CORS)
+// =========================
+
+async function backgroundFetch(url, options = {}) {
+  console.log('[Dental] backgroundFetch REQUEST:', {
+    url,
+    method: options.method || 'GET',
+    headers: options.headers
+  });
+  
+  return new Promise((resolve, reject) => {
+    chrome.runtime.sendMessage(
+      {
+        action: 'fetch',
+        url: url,
+        options: {
+          method: options.method || 'GET',
+          headers: options.headers || {},
+          body: options.body || undefined
+        }
+      },
+      (response) => {
+        if (chrome.runtime.lastError) {
+          console.error('[Dental] backgroundFetch ERROR:', chrome.runtime.lastError.message);
+          reject(new Error(chrome.runtime.lastError.message));
+          return;
+        }
+        
+        if (response.error) {
+          console.error('[Dental] backgroundFetch FAILED:', response);
+          const error = new Error(response.message);
+          error.name = response.name;
+          reject(error);
+          return;
+        }
+        
+        console.log('[Dental] backgroundFetch RESPONSE:', {
+          url,
+          status: response.status,
+          ok: response.ok,
+          data: response.data
+        });
+        
+        // Create a response-like object
+        resolve({
+          ok: response.ok,
+          status: response.status,
+          statusText: response.statusText,
+          headers: { get: (name) => response.headers?.[name.toLowerCase()] },
+          json: async () => response.isJson ? response.data : JSON.parse(response.data),
+          text: async () => typeof response.data === 'string' ? response.data : JSON.stringify(response.data),
+          data: response.data
+        });
+      }
+    );
+  });
+}
+
+// =========================
 // Storage & Auth helpers
 // =========================
 
@@ -64,7 +123,7 @@ async function refreshAccessToken() {
   const baseUrl = await getApiEndpoint();
   const url = `${baseUrl}/api/token/refresh/`;
 
-  const response = await fetch(url, {
+  const response = await backgroundFetch(url, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ refresh: authTokens.refresh })
@@ -88,7 +147,7 @@ async function isAuthenticated() {
   const url = `${baseUrl}/api/token/verify/`;
 
   try {
-    const response = await fetch(url, {
+    const response = await backgroundFetch(url, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ token: authTokens.access })
@@ -119,13 +178,13 @@ async function authenticatedFetch(url, options = {}) {
     'Content-Type': 'application/json'
   };
 
-  let response = await fetch(url, options);
+  let response = await backgroundFetch(url, options);
 
   if (response.status === 401 && authTokens.refresh) {
     try {
       const newAccess = await refreshAccessToken();
       options.headers.Authorization = `Bearer ${newAccess}`;
-      response = await fetch(url, options);
+      response = await backgroundFetch(url, options);
     } catch (err) {
       await clearAuthTokens();
       throw err;
@@ -343,7 +402,7 @@ function renderLogin(container) {
     try {
       const baseUrl = await getApiEndpoint();
       const url = `${baseUrl}/api/token/`;
-      const response = await fetch(url, {
+      const response = await backgroundFetch(url, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email, password })
@@ -379,9 +438,22 @@ async function loadSummaryData(container) {
   try {
     const baseUrl = await getApiEndpoint();
     const url = `${baseUrl}/api/dental-appointments/summary/by-patient-uuid/${currentPatient.uuid}/`;
+    
+    console.log('[Dental] Fetching summary:', { url, patientUuid: currentPatient.uuid });
+    
     const response = await authenticatedFetch(url, { method: 'GET' });
 
+    console.log('[Dental] Response:', {
+      url,
+      status: response.status,
+      statusText: response.statusText,
+      ok: response.ok,
+      data: response.data
+    });
+
     if (!response.ok) {
+      console.log('[Dental] Response not OK:', response.status);
+      
       if (response.status === 401) {
         await clearAuthTokens();
         setAuthUiState(false);
@@ -389,40 +461,38 @@ async function loadSummaryData(container) {
         return;
       }
 
-      // Check if it's a "no appointment" case - treat as valid state, not error
+      // Treat 404 as "no dental data found" - this is a valid state, not an error
       if (response.status === 404) {
-        const errorBody = await response.json().catch(() => ({}));
-        const message = errorBody.detail || '';
-        if (message.toLowerCase().includes('no upcoming') || message.toLowerCase().includes('no appointment')) {
-          // Create a valid summary data structure with no appointment
-          summaryData = {
-            patient: currentPatient ? {
-              customer_identifier: currentPatient.displayId || '',
-              phone_number: ''
-            } : null,
-            appointment: null,
-            allergies: [],
-            past_medical_conditions: [],
-            consumed_items: [],
-            active_visit: null
-          };
-          setPatientLabel();
-          renderTabs(container);
-          return;
-        }
+        console.log('[Dental] 404 - No dental data found for patient');
+        summaryData = {
+          patient: currentPatient ? {
+            customer_identifier: currentPatient.displayId || '',
+            phone_number: ''
+          } : null,
+          appointment: null,
+          allergies: [],
+          past_medical_conditions: [],
+          consumed_items: [],
+          active_visit: null
+        };
+        setPatientLabel();
+        renderNoDataState(container);
+        return;
       }
 
       const errorBody = await response.json().catch(() => ({}));
+      console.log('[Dental] Error body:', errorBody);
       const message = errorBody.detail || `Failed to load summary (HTTP ${response.status})`;
       container.innerHTML = renderErrorState(message);
       return;
     }
 
     summaryData = await response.json();
-    console.log('[Dental] Summary response:', summaryData);
+    console.log('[Dental] Summary data loaded:', summaryData);
     setPatientLabel();
     renderTabs(container);
   } catch (err) {
+    console.error('[Dental] Error loading summary:', err);
     container.innerHTML = renderErrorState(err.message || 'Unable to reach the server.');
   }
 }
@@ -435,6 +505,21 @@ function renderErrorState(message) {
       <div style="margin-top:10px;font-size:12px;color:#555;">
         Check your sign-in status, patient page, or API endpoint configuration.
       </div>
+    </div>
+  `;
+}
+
+function renderNoDataState(container) {
+  container.innerHTML = `
+    <div style="padding:16px;text-align:center;">
+      <div style="font-size:40px;margin-bottom:12px;">🦷</div>
+      <h3 style="margin:0 0 8px 0;color:#00695C;font-size:15px;">No Dental Records Found</h3>
+      <p style="margin:0;color:#666;font-size:13px;">
+        There are no dental appointments or records for this patient yet.
+      </p>
+      <p style="margin:12px 0 0 0;color:#888;font-size:12px;">
+        Records will appear here once dental visits are scheduled or completed.
+      </p>
     </div>
   `;
 }
@@ -1164,7 +1249,7 @@ function renderSettings() {
 
         console.log('[API] Calling endpoint: GET', testUrl);
         console.log('[Settings] Testing connection to:', testUrl);
-        const response = await fetch(testUrl, {
+        const response = await backgroundFetch(testUrl, {
           method: 'GET',
           headers: {
             'Content-Type': 'application/json',
