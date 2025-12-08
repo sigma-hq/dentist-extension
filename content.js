@@ -774,7 +774,7 @@ function renderScreeningTab(screeningData) {
         <div style="font-size:12px;color:#666;">Page <span id="${screeningId}-current-page">1</span> of ${totalPages}</div>
         <div style="display:flex;gap:8px;">
           <button id="${screeningId}-prev" style="background:#f5f5f5;color:#666;border:1px solid #ddd;padding:6px 16px;border-radius:4px;font-size:12px;cursor:not-allowed;opacity:0.5;" disabled>Previous</button>
-          <button id="${screeningId}-next" style="background:#9C27B0;color:white;border:none;padding:6px 16px;border-radius:4px;font-size:12px;cursor:${totalPages <= 1 ? 'not-allowed' : 'pointer'};${totalPages <= 1 ? 'opacity:0.5;' : ''}" ${totalPages <= 1 ? 'disabled' : ''}>Next</button>
+          <button id="${screeningId}-next" style="background:#00695C;color:white;border:none;padding:6px 16px;border-radius:4px;font-size:12px;cursor:${totalPages <= 1 ? 'not-allowed' : 'pointer'};${totalPages <= 1 ? 'opacity:0.5;' : ''}" ${totalPages <= 1 ? 'disabled' : ''}>Next</button>
         </div>
       </div>
     </div>
