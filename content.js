@@ -549,7 +549,7 @@ function renderTabs(container) {
     { id: 'visit', label: 'Visit' },
     { id: 'patient', label: 'Patient' },
     { id: 'allergies', label: 'Allergies' },
-    { id: 'conditions', label: 'Past Medical Conditions' },
+    { id: 'screening', label: 'Medical Screening' },
     // { id: 'consumed', label: 'Items Consumed' }, // Hidden for now, will display later
     { id: 'treatments', label: 'Treatments' }
   ];
@@ -596,8 +596,8 @@ function renderTabs(container) {
       case 'allergies':
         tabContent.innerHTML = renderAllergiesTab(summaryData.allergies || []);
         break;
-      case 'conditions':
-        tabContent.innerHTML = renderConditionsTab(summaryData.past_medical_conditions || []);
+      case 'screening':
+        tabContent.innerHTML = renderScreeningTab(summaryData.screening);
         break;
       case 'consumed':
         tabContent.innerHTML = renderConsumedTab(summaryData.consumed_items || []);
@@ -689,27 +689,173 @@ function renderAllergiesTab(allergies) {
     .join('');
 }
 
-function renderConditionsTab(conditions) {
-  if (!conditions.length) {
-    return '<p style="color:#666;">No past medical conditions recorded.</p>';
+function renderScreeningTab(screeningData) {
+  if (!screeningData || !screeningData.screening) {
+    return `
+      <div style="text-align:center;padding:40px 20px;color:#666;">
+        <p style="margin:0;font-size:14px;">No medical screening data available.</p>
+        <p style="margin:8px 0 0 0;font-size:12px;color:#999;">Screening information will appear here once recorded.</p>
+      </div>
+    `;
   }
 
-  return conditions
-    .map((condition) => {
-      return `
-        <div style="border:1px solid #e0e0e0;border-radius:6px;padding:10px;margin-bottom:10px;background:#fafafa;">
-          ${createTable([
-            ['Condition', condition.disease_name],
-            ['Category', condition.disease_category || '—'],
-            ['Status', condition.status_display || condition.status],
-            ['Diagnosed', condition.diagnosed_date || '—'],
-            ['Notes', condition.notes || '—'],
-            ['Under Treatment', condition.is_under_treatment ? 'Yes' : 'No']
-          ])}
+  // Define all screening conditions with display names
+  const screeningConditions = [
+    { key: 'rheumatic_fever', label: 'Rheumatic fever' },
+    { key: 'epilepsy', label: 'Epilepsy' },
+    { key: 'hepatitis', label: 'Hepatitis' },
+    { key: 'diabetes', label: 'Diabetes' },
+    { key: 'bleeding_disorder', label: 'Bleeding disorder (Haemophilia)' },
+    { key: 'asthma', label: 'Asthma' },
+    { key: 'tuberculosis', label: 'Tuberculosis' },
+    { key: 'rheumatoid_arthritis', label: 'Rheumatoid arthritis' },
+    { key: 'hypertension', label: 'Hypertension' },
+    { key: 'hiv', label: 'HIV' },
+    { key: 'anaemia_leukemia', label: 'Anaemia/Leukemia' },
+    { key: 'psychiatry', label: 'Psychiatry' },
+    { key: 'smoke', label: 'Smoke' },
+    { key: 'pregnant_contraceptives', label: 'Pregnant/Contraceptives' },
+    { key: 'medication', label: 'Medication' },
+    { key: 'alcohol', label: 'Alcohol' },
+    { key: 'surgery', label: 'Surgery' },
+    { key: 'kidney_problems', label: 'Kidney problems' }
+  ];
+
+  // Items per page (6 items per page based on the image)
+  const itemsPerPage = 6;
+  const totalPages = Math.ceil(screeningConditions.length / itemsPerPage);
+
+  // Create unique ID for this screening tab instance
+  const screeningId = `screening-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+
+  // Render first page
+  const currentPage = 1;
+  const startIdx = (currentPage - 1) * itemsPerPage;
+  const endIdx = Math.min(startIdx + itemsPerPage, screeningConditions.length);
+  const pageConditions = screeningConditions.slice(startIdx, endIdx);
+
+  const conditionsHtml = pageConditions.map(condition => {
+    const value = screeningData.screening[condition.key] || false;
+    const yesColor = value ? '#4CAF50' : '#e0e0e0';
+    const noColor = !value ? '#333' : '#e0e0e0';
+    const yesBg = value ? '#e8f5e9' : 'transparent';
+    const noBg = !value ? '#f5f5f5' : 'transparent';
+
+    return `
+      <div style="display:flex;justify-content:space-between;align-items:center;padding:12px 0;border-bottom:1px solid #f0f0f0;">
+        <div style="flex:1;font-size:13px;color:#333;">${condition.label}</div>
+        <div style="display:flex;gap:8px;">
+          <button 
+            data-condition="${condition.key}" 
+            data-value="true"
+            class="screening-yes-btn"
+            style="background:${yesBg};color:${yesColor};border:1px solid ${yesColor};padding:6px 20px;border-radius:20px;font-size:12px;font-weight:${value ? '600' : '500'};cursor:default;transition:all 0.2s;"
+            disabled
+          >Yes</button>
+          <button 
+            data-condition="${condition.key}" 
+            data-value="false"
+            class="screening-no-btn"
+            style="background:${noBg};color:${noColor};border:1px solid ${noColor};padding:6px 20px;border-radius:20px;font-size:12px;font-weight:${!value ? '600' : '500'};cursor:default;transition:all 0.2s;"
+            disabled
+          >No</button>
         </div>
-      `;
-    })
-    .join('');
+      </div>
+    `;
+  }).join('');
+
+  let html = `
+    <div id="${screeningId}" style="padding:0;">
+      <h3 style="margin:0 0 16px 0;font-size:14px;color:#00695C;font-weight:600;">Past Medical Conditions</h3>
+      <div id="${screeningId}-content">
+        ${conditionsHtml}
+      </div>
+      <div id="${screeningId}-pagination" style="display:flex;justify-content:space-between;align-items:center;margin-top:20px;padding-top:16px;border-top:1px solid #e0e0e0;">
+        <div style="font-size:12px;color:#666;">Page <span id="${screeningId}-current-page">1</span> of ${totalPages}</div>
+        <div style="display:flex;gap:8px;">
+          <button id="${screeningId}-prev" style="background:#f5f5f5;color:#666;border:1px solid #ddd;padding:6px 16px;border-radius:4px;font-size:12px;cursor:not-allowed;opacity:0.5;" disabled>Previous</button>
+          <button id="${screeningId}-next" style="background:#9C27B0;color:white;border:none;padding:6px 16px;border-radius:4px;font-size:12px;cursor:${totalPages <= 1 ? 'not-allowed' : 'pointer'};${totalPages <= 1 ? 'opacity:0.5;' : ''}" ${totalPages <= 1 ? 'disabled' : ''}>Next</button>
+        </div>
+      </div>
+    </div>
+  `;
+
+  // Set up pagination after DOM is ready
+  setTimeout(() => {
+    let pageState = { current: 1 };
+    const contentDiv = document.getElementById(`${screeningId}-content`);
+    const currentPageSpan = document.getElementById(`${screeningId}-current-page`);
+    const prevBtn = document.getElementById(`${screeningId}-prev`);
+    const nextBtn = document.getElementById(`${screeningId}-next`);
+
+    if (!contentDiv || !prevBtn || !nextBtn) return;
+
+    const renderPage = (pageNum) => {
+      const startIdx = (pageNum - 1) * itemsPerPage;
+      const endIdx = Math.min(startIdx + itemsPerPage, screeningConditions.length);
+      const pageConditions = screeningConditions.slice(startIdx, endIdx);
+
+      return pageConditions.map(condition => {
+        const value = screeningData.screening[condition.key] || false;
+        const yesColor = value ? '#4CAF50' : '#e0e0e0';
+        const noColor = !value ? '#333' : '#e0e0e0';
+        const yesBg = value ? '#e8f5e9' : 'transparent';
+        const noBg = !value ? '#f5f5f5' : 'transparent';
+
+        return `
+          <div style="display:flex;justify-content:space-between;align-items:center;padding:12px 0;border-bottom:1px solid #f0f0f0;">
+            <div style="flex:1;font-size:13px;color:#333;">${condition.label}</div>
+            <div style="display:flex;gap:8px;">
+              <button 
+                data-condition="${condition.key}" 
+                data-value="true"
+                class="screening-yes-btn"
+                style="background:${yesBg};color:${yesColor};border:1px solid ${yesColor};padding:6px 20px;border-radius:20px;font-size:12px;font-weight:${value ? '600' : '500'};cursor:default;transition:all 0.2s;"
+                disabled
+              >Yes</button>
+              <button 
+                data-condition="${condition.key}" 
+                data-value="false"
+                class="screening-no-btn"
+                style="background:${noBg};color:${noColor};border:1px solid ${noColor};padding:6px 20px;border-radius:20px;font-size:12px;font-weight:${!value ? '600' : '500'};cursor:default;transition:all 0.2s;"
+                disabled
+              >No</button>
+            </div>
+          </div>
+        `;
+      }).join('');
+    };
+
+    const updatePage = () => {
+      contentDiv.innerHTML = renderPage(pageState.current);
+      currentPageSpan.textContent = pageState.current;
+      
+      prevBtn.disabled = pageState.current === 1;
+      prevBtn.style.opacity = pageState.current === 1 ? '0.5' : '1';
+      prevBtn.style.cursor = pageState.current === 1 ? 'not-allowed' : 'pointer';
+      prevBtn.style.background = pageState.current === 1 ? '#f5f5f5' : '#fff';
+      
+      nextBtn.disabled = pageState.current === totalPages;
+      nextBtn.style.opacity = pageState.current === totalPages ? '0.5' : '1';
+      nextBtn.style.cursor = pageState.current === totalPages ? 'not-allowed' : 'pointer';
+    };
+
+    prevBtn.addEventListener('click', () => {
+      if (pageState.current > 1) {
+        pageState.current--;
+        updatePage();
+      }
+    });
+
+    nextBtn.addEventListener('click', () => {
+      if (pageState.current < totalPages) {
+        pageState.current++;
+        updatePage();
+      }
+    });
+  }, 50);
+
+  return html;
 }
 
 function renderConsumedTab(items) {
