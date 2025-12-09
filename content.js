@@ -645,7 +645,7 @@ function renderVisitTab(data) {
   const appointmentSection = appointment
     ? `
       <div>
-        <h4 style="margin:0 0 8px 0;font-size:13px;color:#00695C;">Upcoming Appointment</h4>
+        <h4 style="margin:0 0 8px 0;font-size:13px;color:#00695C;">Appointments</h4>
         ${createTable([
           ['Status', formatStatus(appointment.status)],
           ['Date', appointment.appointment_date || '—'],
@@ -657,8 +657,8 @@ function renderVisitTab(data) {
     `
     : `
       <div style="margin-top:12px;">
-        <h4 style="margin:0 0 8px 0;font-size:13px;color:#00695C;">Upcoming Appointment</h4>
-        <p style="color:#666;margin:0;">No upcoming appointment scheduled.</p>
+        <h4 style="margin:0 0 8px 0;font-size:13px;color:#00695C;">Appointments</h4>
+        <p style="color:#666;margin:0;">No appointment scheduled.</p>
       </div>
     `;
 
