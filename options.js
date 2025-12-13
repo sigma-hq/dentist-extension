@@ -2,7 +2,7 @@
 document.addEventListener('DOMContentLoaded', () => {
   chrome.storage.local.get(['apiEndpoint'], (result) => {
     const input = document.getElementById('apiEndpoint');
-    input.value = result.apiEndpoint || 'http://localhost:8000';
+    input.value = result.apiEndpoint || 'http://192.168.1.169:5000';
   });
 });
 

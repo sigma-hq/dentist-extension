@@ -110,7 +110,7 @@ async function getApiEndpoint() {
   const storage = await new Promise((resolve) => {
     chrome.storage.local.get(['apiEndpoint'], resolve);
   });
-  const endpoint = storage.apiEndpoint || 'http://localhost:8000';
+  const endpoint = storage.apiEndpoint || 'http://192.168.1.169:5000';
   return endpoint.replace(/\/$/, '');
 }
 
@@ -1265,7 +1265,7 @@ function renderSettings() {
 
   // Load current endpoint
   chrome.storage.local.get(['apiEndpoint'], (result) => {
-    const currentEndpoint = result.apiEndpoint || 'http://localhost:8000';
+    const currentEndpoint = result.apiEndpoint || 'http://192.168.1.169:5000';
 
     content.innerHTML = `
       <div style="padding: 0;">
