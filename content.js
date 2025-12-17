@@ -5,6 +5,8 @@ let collapsedView = null;
 let currentPatient = null;
 let summaryData = null;
 let isCollapsed = false;
+let serviceProducts = [];
+let serviceProductsFetchPromise = null;
 
 const authTokens = {
   access: null,
@@ -192,6 +194,89 @@ async function authenticatedFetch(url, options = {}) {
   }
 
   return response;
+}
+
+function escapeHtml(value) {
+  if (value === undefined || value === null) return '';
+  return String(value)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#039;');
+}
+
+// =========================
+// Service products (procedure list)
+// =========================
+
+function ensureServiceProductsFetching() {
+  if (!serviceProductsFetchPromise) {
+    serviceProductsFetchPromise = fetchServiceProducts();
+  }
+  return serviceProductsFetchPromise;
+}
+
+async function fetchServiceProducts() {
+  try {
+    const baseUrl = await getApiEndpoint();
+    const url = `${baseUrl}/api/odoo/products/services/?get_all=true`;
+    console.log('[Dental] Fetching service products (procedures):', url);
+
+    const response = await authenticatedFetch(url, { method: 'GET' });
+    console.log('[Dental] Service products response:', {
+      status: response.status,
+      ok: response.ok
+    });
+
+    if (!response.ok) {
+      const errorBody = await response.json().catch(() => ({}));
+      throw new Error(errorBody.detail || errorBody.message || `Failed to load service products (HTTP ${response.status})`);
+    }
+
+    const data = await response.json();
+    console.log('[Dental] Service products data:', data);
+
+    // Support both paginated and plain list responses
+    const items = Array.isArray(data) ? data : data.results || [];
+    serviceProducts = items;
+    refreshProcedureOptions();
+  } catch (err) {
+    console.error('[Dental] Error fetching service products:', err);
+    serviceProductsFetchPromise = null;
+  }
+}
+
+function refreshProcedureOptions(scope) {
+  const context = scope || overlay || document;
+  if (!context) return;
+
+  const listEl = context.querySelector('#procedure_name_options');
+  const statusEl = context.querySelector('#procedure_name_status');
+
+  if (!listEl) return;
+
+  if (!serviceProducts || !serviceProducts.length) {
+    listEl.innerHTML = '';
+    if (statusEl) {
+      statusEl.textContent = 'No services loaded yet.';
+    }
+    return;
+  }
+
+  const optionsHtml = serviceProducts
+    .map((item) => {
+      const name = item.name || item.display_name || item.product_name || 'Unnamed service';
+      const price = item.list_price ?? item.lst_price ?? item.price;
+      const label = price !== undefined ? `${name} - ${price}` : name;
+      return `<option value="${escapeHtml(name)}" label="${escapeHtml(label)}"></option>`;
+    })
+    .join('');
+
+  listEl.innerHTML = optionsHtml;
+  if (statusEl) {
+    statusEl.textContent = `Loaded ${serviceProducts.length} services`;
+  }
 }
 
 // =========================
@@ -434,6 +519,8 @@ async function loadSummaryData(container) {
     </div>
     <style>@keyframes spin { to { transform: rotate(360deg); } }</style>
   `;
+
+  ensureServiceProductsFetching().then(() => refreshProcedureOptions(container));
 
   try {
     const baseUrl = await getApiEndpoint();
@@ -736,10 +823,12 @@ function renderScreeningTab(screeningData) {
 
   const conditionsHtml = pageConditions.map(condition => {
     const value = screeningData.screening[condition.key] || false;
-    const yesColor = value ? '#4CAF50' : '#e0e0e0';
-    const noColor = !value ? '#333' : '#e0e0e0';
-    const yesBg = value ? '#e8f5e9' : 'transparent';
-    const noBg = !value ? '#f5f5f5' : 'transparent';
+    const yesColor = value ? '#ffffff' : '#333';
+    const noColor = !value ? '#ffffff' : '#333';
+    const yesBg = value ? '#4CAF50' : '#ffffff';
+    const noBg = !value ? '#666' : '#ffffff';
+    const yesBorder = value ? '#4CAF50' : '#999';
+    const noBorder = !value ? '#666' : '#999';
 
     return `
       <div style="display:flex;justify-content:space-between;align-items:center;padding:12px 0;border-bottom:1px solid #f0f0f0;">
@@ -749,14 +838,14 @@ function renderScreeningTab(screeningData) {
             data-condition="${condition.key}" 
             data-value="true"
             class="screening-yes-btn"
-            style="background:${yesBg};color:${yesColor};border:1px solid ${yesColor};padding:6px 20px;border-radius:20px;font-size:12px;font-weight:${value ? '600' : '500'};cursor:default;transition:all 0.2s;"
+            style="background:${yesBg};color:${yesColor};border:2px solid ${yesBorder};padding:7px 22px;border-radius:20px;font-size:13px;font-weight:600;cursor:default;transition:all 0.2s;min-width:60px;opacity:1;"
             disabled
           >Yes</button>
           <button 
             data-condition="${condition.key}" 
             data-value="false"
             class="screening-no-btn"
-            style="background:${noBg};color:${noColor};border:1px solid ${noColor};padding:6px 20px;border-radius:20px;font-size:12px;font-weight:${!value ? '600' : '500'};cursor:default;transition:all 0.2s;"
+            style="background:${noBg};color:${noColor};border:2px solid ${noBorder};padding:7px 22px;border-radius:20px;font-size:13px;font-weight:600;cursor:default;transition:all 0.2s;min-width:60px;opacity:1;"
             disabled
           >No</button>
         </div>
@@ -797,10 +886,12 @@ function renderScreeningTab(screeningData) {
 
       return pageConditions.map(condition => {
         const value = screeningData.screening[condition.key] || false;
-        const yesColor = value ? '#4CAF50' : '#e0e0e0';
-        const noColor = !value ? '#333' : '#e0e0e0';
-        const yesBg = value ? '#e8f5e9' : 'transparent';
-        const noBg = !value ? '#f5f5f5' : 'transparent';
+        const yesColor = value ? '#ffffff' : '#333';
+        const noColor = !value ? '#ffffff' : '#333';
+        const yesBg = value ? '#4CAF50' : '#ffffff';
+        const noBg = !value ? '#666' : '#ffffff';
+        const yesBorder = value ? '#4CAF50' : '#999';
+        const noBorder = !value ? '#666' : '#999';
 
         return `
           <div style="display:flex;justify-content:space-between;align-items:center;padding:12px 0;border-bottom:1px solid #f0f0f0;">
@@ -810,14 +901,14 @@ function renderScreeningTab(screeningData) {
                 data-condition="${condition.key}" 
                 data-value="true"
                 class="screening-yes-btn"
-                style="background:${yesBg};color:${yesColor};border:1px solid ${yesColor};padding:6px 20px;border-radius:20px;font-size:12px;font-weight:${value ? '600' : '500'};cursor:default;transition:all 0.2s;"
+                style="background:${yesBg};color:${yesColor};border:2px solid ${yesBorder};padding:7px 22px;border-radius:20px;font-size:13px;font-weight:600;cursor:default;transition:all 0.2s;min-width:60px;opacity:1;"
                 disabled
               >Yes</button>
               <button 
                 data-condition="${condition.key}" 
                 data-value="false"
                 class="screening-no-btn"
-                style="background:${noBg};color:${noColor};border:1px solid ${noColor};padding:6px 20px;border-radius:20px;font-size:12px;font-weight:${!value ? '600' : '500'};cursor:default;transition:all 0.2s;"
+                style="background:${noBg};color:${noColor};border:2px solid ${noBorder};padding:7px 22px;border-radius:20px;font-size:13px;font-weight:600;cursor:default;transition:all 0.2s;min-width:60px;opacity:1;"
                 disabled
               >No</button>
             </div>
@@ -921,7 +1012,9 @@ function renderTreatmentsTab(data) {
           </div>
           <div>
             <label style="display:block;margin-bottom:4px;font-size:12px;font-weight:500;color:#333;">Procedure Name *</label>
-            <input type="text" id="procedure_name" required placeholder="e.g., Composite filling" style="width:100%;padding:8px;border:1px solid #ddd;border-radius:4px;font-size:13px;box-sizing:border-box;height:36px;background:#fff;" />
+            <input type="text" id="procedure_name" list="procedure_name_options" required placeholder="Search or type a procedure" style="width:100%;padding:8px;border:1px solid #ddd;border-radius:4px;font-size:13px;box-sizing:border-box;height:36px;background:#fff;" />
+            <datalist id="procedure_name_options"></datalist>
+            <div id="procedure_name_status" style="margin-top:4px;font-size:11px;color:#666;">Loading service procedures...</div>
           </div>
           <div>
             <label style="display:block;margin-bottom:4px;font-size:12px;font-weight:500;color:#333;">Treatment Status *</label>
@@ -1062,6 +1155,10 @@ function setupTreatmentForm(container) {
   const followUpSection = container.querySelector('#follow_up_section');
   const errorDiv = container.querySelector('#dentist-treatment-error');
   const successDiv = container.querySelector('#dentist-treatment-success');
+
+  // Kick off background fetch for service procedures without blocking other calls
+  ensureServiceProductsFetching().then(() => refreshProcedureOptions(container));
+  refreshProcedureOptions(container);
 
   // Toggle advanced section visibility
   if (toggleAdvanced && advancedSection) {
