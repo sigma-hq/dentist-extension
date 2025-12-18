@@ -7,6 +7,7 @@ let summaryData = null;
 let isCollapsed = false;
 let serviceProducts = [];
 let serviceProductsFetchPromise = null;
+let serviceProductsLoading = false;
 
 const authTokens = {
   access: null,
@@ -218,6 +219,9 @@ function ensureServiceProductsFetching() {
 }
 
 async function fetchServiceProducts() {
+  serviceProductsLoading = true;
+  refreshProcedureOptions();
+
   try {
     const baseUrl = await getApiEndpoint();
     const url = `${baseUrl}/api/odoo/products/services/?get_all=true`;
@@ -237,13 +241,21 @@ async function fetchServiceProducts() {
     const data = await response.json();
     console.log('[Dental] Service products data:', data);
 
-    // Support both paginated and plain list responses
-    const items = Array.isArray(data) ? data : data.results || [];
+    // Support both paginated and plain list responses, including `data` wrappers
+    const items =
+      (Array.isArray(data) && data) ||
+      (Array.isArray(data?.results) && data.results) ||
+      (Array.isArray(data?.data) && data.data) ||
+      (Array.isArray(data?.data?.results) && data.data.results) ||
+      [];
     serviceProducts = items;
     refreshProcedureOptions();
   } catch (err) {
     console.error('[Dental] Error fetching service products:', err);
     serviceProductsFetchPromise = null;
+  } finally {
+    serviceProductsLoading = false;
+    refreshProcedureOptions();
   }
 }
 
@@ -254,29 +266,36 @@ function refreshProcedureOptions(scope) {
   const listEl = context.querySelector('#procedure_name_options');
   const statusEl = context.querySelector('#procedure_name_status');
 
-  if (!listEl) return;
+  const setStatus = (text) => {
+    if (statusEl) statusEl.textContent = text;
+  };
 
-  if (!serviceProducts || !serviceProducts.length) {
-    listEl.innerHTML = '';
-    if (statusEl) {
-      statusEl.textContent = 'No services loaded yet.';
-    }
+  if (serviceProductsLoading) {
+    if (listEl) listEl.innerHTML = '';
+    setStatus('Loading service procedures...');
     return;
   }
 
-  const optionsHtml = serviceProducts
-    .map((item) => {
-      const name = item.name || item.display_name || item.product_name || 'Unnamed service';
-      const price = item.list_price ?? item.lst_price ?? item.price;
-      const label = price !== undefined ? `${name} - ${price}` : name;
-      return `<option value="${escapeHtml(name)}" label="${escapeHtml(label)}"></option>`;
-    })
-    .join('');
-
-  listEl.innerHTML = optionsHtml;
-  if (statusEl) {
-    statusEl.textContent = `Loaded ${serviceProducts.length} services`;
+  if (!serviceProducts || !serviceProducts.length) {
+    if (listEl) listEl.innerHTML = '';
+    setStatus('No services loaded yet.');
+    return;
   }
+
+  if (listEl) {
+    const optionsHtml = serviceProducts
+      .map((item) => {
+        const name = item.name || item.display_name || item.product_name || 'Unnamed service';
+        const price = item.list_price ?? item.lst_price ?? item.price;
+        const label = price !== undefined ? `${name} - ${price}` : name;
+        return `<option value="${escapeHtml(name)}" label="${escapeHtml(label)}"></option>`;
+      })
+      .join('');
+
+    listEl.innerHTML = optionsHtml;
+  }
+
+  setStatus(`Loaded ${serviceProducts.length} services`);
 }
 
 // =========================
@@ -520,7 +539,10 @@ async function loadSummaryData(container) {
     <style>@keyframes spin { to { transform: rotate(360deg); } }</style>
   `;
 
-  ensureServiceProductsFetching().then(() => refreshProcedureOptions(container));
+  ensureServiceProductsFetching().then(() => {
+    refreshProcedureOptions(container);
+    renderProcedureDropdown();
+  });
 
   try {
     const baseUrl = await getApiEndpoint();
@@ -1010,12 +1032,16 @@ function renderTreatmentsTab(data) {
             <label style="display:block;margin-bottom:4px;font-size:12px;font-weight:500;color:#333;">Treatment Date *</label>
             <input type="date" id="treatment_date" required style="width:100%;padding:8px;border:1px solid #ddd;border-radius:4px;font-size:13px;box-sizing:border-box;height:36px;background:#fff;" />
           </div>
-          <div>
-            <label style="display:block;margin-bottom:4px;font-size:12px;font-weight:500;color:#333;">Procedure Name *</label>
-            <input type="text" id="procedure_name" list="procedure_name_options" required placeholder="Search or type a procedure" style="width:100%;padding:8px;border:1px solid #ddd;border-radius:4px;font-size:13px;box-sizing:border-box;height:36px;background:#fff;" />
-            <datalist id="procedure_name_options"></datalist>
-            <div id="procedure_name_status" style="margin-top:4px;font-size:11px;color:#666;">Loading service procedures...</div>
-          </div>
+            <div>
+              <label style="display:block;margin-bottom:4px;font-size:12px;font-weight:500;color:#333;">Procedure Name *</label>
+              <div id="procedure_input_wrapper" style="position:relative;">
+                <input type="text" id="procedure_name" autocomplete="off" required placeholder="Search or type a procedure" style="width:100%;padding:8px;border:1px solid #ddd;border-radius:4px;font-size:13px;box-sizing:border-box;height:36px;background:#fff;outline:none;" />
+                <div id="procedure_input_spinner" style="display:none;position:absolute;right:10px;top:50%;transform:translateY(-50%);width:16px;height:16px;border:2px solid #e0e0e0;border-top-color:#00695C;border-radius:50%;animation:spin 0.9s linear infinite;"></div>
+                <div id="procedure_dropdown" style="display:none;position:absolute;z-index:10000;top:40px;left:0;width:100%;background:#fff;border:1px solid #e5e7eb;box-shadow:0 8px 22px rgba(0,0,0,0.12);border-radius:6px;max-height:260px;overflow-y:auto;">
+                </div>
+              </div>
+              <div id="procedure_name_status" style="margin-top:4px;font-size:11px;color:#666;">Loading service procedures...</div>
+            </div>
           <div>
             <label style="display:block;margin-bottom:4px;font-size:12px;font-weight:500;color:#333;">Treatment Status *</label>
             <select id="treatment_status" required style="width:100%;padding:8px;border:1px solid #ddd;border-radius:4px;font-size:13px;box-sizing:border-box;height:36px;background:#fff;">
@@ -1155,10 +1181,217 @@ function setupTreatmentForm(container) {
   const followUpSection = container.querySelector('#follow_up_section');
   const errorDiv = container.querySelector('#dentist-treatment-error');
   const successDiv = container.querySelector('#dentist-treatment-success');
+  const procedureInput = container.querySelector('#procedure_name');
+  const procedureWrapper = container.querySelector('#procedure_input_wrapper');
+  const procedureDropdown = container.querySelector('#procedure_dropdown');
+  const procedureSpinner = container.querySelector('#procedure_input_spinner');
+  const procedureStatus = container.querySelector('#procedure_name_status');
 
   // Kick off background fetch for service procedures without blocking other calls
   ensureServiceProductsFetching().then(() => refreshProcedureOptions(container));
   refreshProcedureOptions(container);
+
+  // --- Procedure autocomplete dropdown ---
+  let isProcedureDropdownOpen = false;
+  let highlightedProcedureIndex = 0;
+
+  const ensureSpinnerKeyframes = () => {
+    if (document.getElementById('dentist-spinner-style')) return;
+    const style = document.createElement('style');
+    style.id = 'dentist-spinner-style';
+    style.textContent = '@keyframes spin { to { transform: rotate(360deg); } }';
+    document.head.appendChild(style);
+  };
+  ensureSpinnerKeyframes();
+
+  const getProcedureDisplayName = (item) => item?.name || item?.display_name || item?.product_name || 'Unnamed service';
+
+  const getFilteredProcedures = () => {
+    const query = procedureInput?.value?.trim().toLowerCase() || '';
+    if (!serviceProducts || !serviceProducts.length) return [];
+
+    const matches = serviceProducts.filter((item) => {
+      const name = (item.name || item.display_name || item.product_name || '').toLowerCase();
+      const code = (item.default_code || '').toLowerCase();
+      return !query || name.includes(query) || code.includes(query);
+    });
+
+    return matches.slice(0, 50);
+  };
+
+  const closeProcedureDropdown = () => {
+    isProcedureDropdownOpen = false;
+    if (procedureDropdown) {
+      procedureDropdown.style.display = 'none';
+    }
+  };
+
+  const renderProcedureDropdown = () => {
+    if (!procedureDropdown || !procedureInput || !procedureWrapper) return;
+
+    if (procedureSpinner) {
+      procedureSpinner.style.display = serviceProductsLoading ? 'block' : 'none';
+    }
+
+    const filtered = getFilteredProcedures();
+
+    if (!isProcedureDropdownOpen) {
+      procedureDropdown.style.display = 'none';
+      return;
+    }
+
+    let inner = '';
+
+    if (serviceProductsLoading) {
+      inner = `
+        <div style="display:flex;align-items:center;justify-content:center;padding:12px;font-size:12px;color:#555;gap:8px;">
+          <div style="width:14px;height:14px;border:2px solid #e0e0e0;border-top-color:#00695C;border-radius:50%;animation:spin 0.9s linear infinite;"></div>
+          <span>Loading procedures...</span>
+        </div>
+      `;
+    } else if (filtered.length === 0) {
+      inner = `
+        <div style="padding:12px;font-size:12px;color:#666;">
+          No procedures found. Continue typing to add a custom name.
+        </div>
+      `;
+    } else {
+      inner = filtered
+        .map((item, idx) => {
+          const name = getProcedureDisplayName(item);
+          const price = item.list_price ?? item.lst_price ?? item.price;
+          const code = item.default_code;
+          const pricePart = price !== undefined ? ` • ${price}` : '';
+          const codePart = code ? ` (${code})` : '';
+          const isActive = idx === highlightedProcedureIndex;
+          return `
+          <div
+            class="procedure-dropdown-item"
+            data-idx="${idx}"
+            style="
+              width:100%;
+              display:block;
+              text-align:left;
+              background:${isActive ? '#eef4ff' : 'transparent'};
+              padding:10px 12px;
+              cursor:pointer;
+              font-size:13px;
+              transition:background 0.15s ease;
+              color:#1f2937;
+            "
+          >
+            <div style="font-weight:600;color:#1f2937;pointer-events:none;">${escapeHtml(name)}${escapeHtml(codePart)}</div>
+            <div style="font-size:12px;color:#6b7280;pointer-events:none;">${escapeHtml(item.categ_id?.[1] || '')}${pricePart ? escapeHtml(pricePart) : ''}</div>
+          </div>
+        `;
+        })
+        .join('');
+    }
+
+    procedureDropdown.innerHTML = inner;
+    procedureDropdown.style.display = 'block';
+
+    // CRITICAL: Attach event handlers to each item AFTER rendering
+    const items = procedureDropdown.querySelectorAll('.procedure-dropdown-item');
+    items.forEach((item) => {
+      // Use mousedown to prevent input blur from closing dropdown before click registers
+      item.addEventListener('mousedown', (e) => {
+        e.preventDefault(); // Prevent input blur
+        const idx = Number(item.dataset.idx);
+        if (filtered[idx]) {
+          handleProcedureSelect(filtered[idx]);
+        }
+      });
+      
+      // Hover effect
+      item.addEventListener('mouseenter', () => {
+        highlightedProcedureIndex = Number(item.dataset.idx);
+        renderProcedureDropdown();
+      });
+    });
+  };
+
+  const handleProcedureSelect = (item) => {
+    if (!procedureInput) return;
+    procedureInput.value = getProcedureDisplayName(item);
+    closeProcedureDropdown();
+  };
+
+  const openProcedureDropdown = () => {
+    isProcedureDropdownOpen = true;
+    highlightedProcedureIndex = 0;
+    renderProcedureDropdown();
+  };
+
+  if (procedureInput) {
+    procedureInput.addEventListener('input', () => {
+      isProcedureDropdownOpen = true;
+      highlightedProcedureIndex = 0;
+      renderProcedureDropdown();
+      if (procedureStatus && serviceProducts?.length) {
+        const filtered = getFilteredProcedures();
+        procedureStatus.textContent = filtered.length ? `Showing ${filtered.length} matching procedures` : 'No match yet. Keep typing to add a custom value.';
+      }
+    });
+
+    procedureInput.addEventListener('focus', () => {
+      openProcedureDropdown();
+    });
+
+    procedureInput.addEventListener('keydown', (e) => {
+      const filtered = getFilteredProcedures();
+      if (!isProcedureDropdownOpen && ['ArrowDown', 'ArrowUp'].includes(e.key)) {
+        openProcedureDropdown();
+        return;
+      }
+
+      if (!isProcedureDropdownOpen || (!filtered.length && !serviceProductsLoading)) return;
+
+      switch (e.key) {
+        case 'ArrowDown':
+          e.preventDefault();
+          if (filtered.length) {
+            highlightedProcedureIndex = Math.min(filtered.length - 1, highlightedProcedureIndex + 1);
+            renderProcedureDropdown();
+          }
+          break;
+        case 'ArrowUp':
+          e.preventDefault();
+          if (filtered.length) {
+            highlightedProcedureIndex = Math.max(0, highlightedProcedureIndex - 1);
+            renderProcedureDropdown();
+          }
+          break;
+        case 'Enter':
+          if (filtered[highlightedProcedureIndex]) {
+            e.preventDefault();
+            handleProcedureSelect(filtered[highlightedProcedureIndex]);
+          }
+          break;
+        case 'Escape':
+          e.preventDefault();
+          closeProcedureDropdown();
+          break;
+        default:
+          break;
+      }
+    });
+  }
+
+  if (procedureDropdown) {
+    // Event handlers are now attached directly to items in renderProcedureDropdown
+    // No need for container-level event delegation
+  }
+
+  document.addEventListener('click', (e) => {
+    if (!procedureWrapper) return;
+    if (!procedureWrapper.contains(e.target)) {
+      closeProcedureDropdown();
+    }
+  });
+
+  // Initial render
+  renderProcedureDropdown();
 
   // Toggle advanced section visibility
   if (toggleAdvanced && advancedSection) {
