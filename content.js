@@ -1186,6 +1186,7 @@ function setupTreatmentForm(container) {
   const procedureDropdown = container.querySelector('#procedure_dropdown');
   const procedureSpinner = container.querySelector('#procedure_input_spinner');
   const procedureStatus = container.querySelector('#procedure_name_status');
+  let selectedProcedureId = null;
 
   // Kick off background fetch for service procedures without blocking other calls
   ensureServiceProductsFetching().then(() => refreshProcedureOptions(container));
@@ -1205,6 +1206,7 @@ function setupTreatmentForm(container) {
   ensureSpinnerKeyframes();
 
   const getProcedureDisplayName = (item) => item?.name || item?.display_name || item?.product_name || 'Unnamed service';
+  const getProcedureId = (item) => item?.id ?? item?.product_id ?? item?.local_product_id ?? null;
 
   const getFilteredProcedures = () => {
     const query = procedureInput?.value?.trim().toLowerCase() || '';
@@ -1217,6 +1219,18 @@ function setupTreatmentForm(container) {
     });
 
     return matches.slice(0, 50);
+  };
+
+  const findProcedureByNameOrCode = (value) => {
+    if (!value || !serviceProducts?.length) return null;
+    const target = value.trim().toLowerCase();
+    return (
+      serviceProducts.find((item) => {
+        const name = (item.name || item.display_name || item.product_name || '').toLowerCase();
+        const code = (item.default_code || '').toLowerCase();
+        return (name && name === target) || (code && code === target);
+      }) || null
+    );
   };
 
   const closeProcedureDropdown = () => {
@@ -1314,6 +1328,7 @@ function setupTreatmentForm(container) {
   const handleProcedureSelect = (item) => {
     if (!procedureInput) return;
     procedureInput.value = getProcedureDisplayName(item);
+    selectedProcedureId = getProcedureId(item);
     closeProcedureDropdown();
   };
 
@@ -1325,6 +1340,7 @@ function setupTreatmentForm(container) {
 
   if (procedureInput) {
     procedureInput.addEventListener('input', () => {
+      selectedProcedureId = null;
       isProcedureDropdownOpen = true;
       highlightedProcedureIndex = 0;
       renderProcedureDropdown();
@@ -1430,15 +1446,27 @@ function setupTreatmentForm(container) {
         return;
       }
 
+      const procedureNameValue = container.querySelector('#procedure_name').value.trim();
+      const resolvedProcedure =
+        selectedProcedureId !== null
+          ? selectedProcedureId
+          : getProcedureId(findProcedureByNameOrCode(procedureNameValue));
+
       // Build payload
       const payload = {
         visit: visitId,
         tooth_number: container.querySelector('#tooth_number').value.trim(),
-        procedure_name: container.querySelector('#procedure_name').value.trim(),
+        procedure_name: procedureNameValue,
         procedure_category: container.querySelector('#procedure_category').value,
         treatment_status: container.querySelector('#treatment_status').value,
         treatment_date: container.querySelector('#treatment_date').value
       };
+
+      if (resolvedProcedure !== null && resolvedProcedure !== undefined) {
+        payload.procedure_product_id = resolvedProcedure;
+      }
+
+      console.log('[Dental] Treatment payload:', payload);
 
       // Optional fields
       const numberingSystem = container.querySelector('#numbering_system').value;
