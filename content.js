@@ -8,6 +8,8 @@ let isCollapsed = false;
 let serviceProducts = [];
 let serviceProductsFetchPromise = null;
 let serviceProductsLoading = false;
+let isUserAuthenticated = false;
+let refreshInProgress = false;
 
 const authTokens = {
   access: null,
@@ -322,6 +324,7 @@ function extractPatient() {
   if (uuid && (!currentPatient || currentPatient.uuid !== uuid)) {
     currentPatient = { uuid, displayId };
     summaryData = null;
+    updateRefreshButtonState();
     renderOverlayForPatient();
   }
 }
@@ -359,6 +362,7 @@ function buildOverlayShell() {
         </div>
         <div style="display:flex;align-items:center;gap:8px;">
           <button id="dentist-settings-btn" title="Settings" style="background:none;border:1px solid rgba(255,255,255,0.4);color:#fff;padding:6px 10px;border-radius:6px;cursor:pointer;font-size:12px;">Settings</button>
+          <button id="dentist-refresh-btn" title="Refresh summary" style="background:none;border:1px solid rgba(255,255,255,0.4);color:#fff;padding:6px 10px;border-radius:6px;cursor:pointer;font-size:12px;">Refresh</button>
           <button id="dentist-logout-btn" title="Sign out" style="background:#c62828;border:none;color:#fff;padding:6px 10px;border-radius:6px;cursor:pointer;font-size:12px;display:none;">Logout</button>
           <button id="dentist-minimize-btn" title="Minimize" style="background:none;border:none;font-size:20px;cursor:pointer;color:white;padding:0 4px;">−</button>
         </div>
@@ -407,11 +411,32 @@ function buildOverlayShell() {
     renderSettings();
   });
 
+  const refreshBtn = overlay.querySelector('#dentist-refresh-btn');
+  if (refreshBtn) {
+    refreshBtn.addEventListener('click', async () => {
+      if (!currentPatient || refreshInProgress) return;
+      refreshInProgress = true;
+      const originalText = refreshBtn.textContent;
+      refreshBtn.disabled = true;
+      refreshBtn.textContent = 'Refreshing...';
+      try {
+        await renderOverlayForPatient();
+      } catch (err) {
+        console.error('[Dental] Manual refresh failed:', err);
+      } finally {
+        refreshInProgress = false;
+        refreshBtn.textContent = originalText;
+        updateRefreshButtonState();
+      }
+    });
+  }
+
   overlay.querySelector('#dentist-logout-btn').addEventListener('click', async () => {
     await clearAuthTokens();
     summaryData = null;
     renderOverlayForPatient();
   });
+  updateRefreshButtonState();
 }
 
 function setPatientLabel() {
@@ -427,10 +452,19 @@ function setPatientLabel() {
   labelEl.textContent = pieces.join(' • ');
 }
 
+function updateRefreshButtonState() {
+  const refreshBtn = overlay?.querySelector('#dentist-refresh-btn');
+  if (!refreshBtn) return;
+  refreshBtn.disabled = !currentPatient || refreshInProgress || !isUserAuthenticated;
+}
+
 function setAuthUiState(authenticated) {
+  isUserAuthenticated = authenticated;
   const logoutBtn = overlay?.querySelector('#dentist-logout-btn');
-  if (!logoutBtn) return;
-  logoutBtn.style.display = authenticated ? 'inline-block' : 'none';
+  if (logoutBtn) {
+    logoutBtn.style.display = authenticated ? 'inline-block' : 'none';
+  }
+  updateRefreshButtonState();
 }
 
 // =========================
