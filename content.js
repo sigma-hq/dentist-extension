@@ -361,8 +361,8 @@ function buildOverlayShell() {
           <div id="dentist-patient-label" style="font-size:12px;opacity:0.85;margin-top:2px;">Loading patient...</div>
         </div>
         <div style="display:flex;align-items:center;gap:8px;">
-          <button id="dentist-settings-btn" title="Settings" style="background:none;border:1px solid rgba(255,255,255,0.4);color:#fff;padding:6px 10px;border-radius:6px;cursor:pointer;font-size:12px;">Settings</button>
           <button id="dentist-refresh-btn" title="Refresh summary" style="background:none;border:1px solid rgba(255,255,255,0.4);color:#fff;padding:6px 10px;border-radius:6px;cursor:pointer;font-size:12px;">Refresh</button>
+          <button id="dentist-settings-btn" title="Settings" style="background:none;border:1px solid rgba(255,255,255,0.4);color:#fff;padding:6px 10px;border-radius:6px;cursor:pointer;font-size:12px;">Settings</button>
           <button id="dentist-logout-btn" title="Sign out" style="background:#c62828;border:none;color:#fff;padding:6px 10px;border-radius:6px;cursor:pointer;font-size:12px;display:none;">Logout</button>
           <button id="dentist-minimize-btn" title="Minimize" style="background:none;border:none;font-size:20px;cursor:pointer;color:white;padding:0 4px;">−</button>
         </div>
