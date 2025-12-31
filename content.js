@@ -1496,6 +1496,14 @@ function setupTreatmentForm(container) {
         treatment_date: container.querySelector('#treatment_date').value
       };
 
+      const activeVisit = summaryData?.active_visit;
+      if (activeVisit?.mode_of_payment === 'insurance') {
+        const pricelistId = activeVisit?.insurance_scheme?.pricelist_id;
+        if (pricelistId) {
+          payload.pricelist_id = pricelistId;
+        }
+      }
+
       if (resolvedProcedure !== null && resolvedProcedure !== undefined) {
         payload.procedure_product_id = resolvedProcedure;
       }
