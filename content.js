@@ -226,34 +226,52 @@ async function fetchServiceProducts() {
 
   try {
     const baseUrl = await getApiEndpoint();
-    const url = `${baseUrl}/api/odoo/products/services/?get_all=true`;
-    console.log('[Dental] Fetching service products (procedures):', url);
+    const url = `${baseUrl}/api/products/dental/?page_size=100`;
+    console.log('[Dental] Fetching dental products (procedures):', url);
 
-    const response = await authenticatedFetch(url, { method: 'GET' });
-    console.log('[Dental] Service products response:', {
-      status: response.status,
-      ok: response.ok
-    });
+    const allItems = [];
+    let nextUrl = url;
 
-    if (!response.ok) {
-      const errorBody = await response.json().catch(() => ({}));
-      throw new Error(errorBody.detail || errorBody.message || `Failed to load service products (HTTP ${response.status})`);
+    while (nextUrl) {
+      const response = await authenticatedFetch(nextUrl, { method: 'GET' });
+      console.log('[Dental] Dental products response:', {
+        url: nextUrl,
+        status: response.status,
+        ok: response.ok
+      });
+
+      if (!response.ok) {
+        const errorBody = await response.json().catch(() => ({}));
+        throw new Error(errorBody.detail || errorBody.message || `Failed to load dental products (HTTP ${response.status})`);
+      }
+
+      const data = await response.json();
+      console.log('[Dental] Dental products data:', data);
+
+      const items =
+        (Array.isArray(data) && data) ||
+        (Array.isArray(data?.results) && data.results) ||
+        (Array.isArray(data?.data) && data.data) ||
+        (Array.isArray(data?.data?.results) && data.data.results) ||
+        [];
+      if (items.length) {
+        allItems.push(...items);
+      }
+
+      const nextValue = data?.next ?? data?.data?.next ?? null;
+      if (typeof nextValue === 'string' && nextValue.length > 0) {
+        nextUrl = nextValue.startsWith('http')
+          ? nextValue
+          : `${baseUrl}${nextValue.startsWith('/') ? '' : '/'}${nextValue}`;
+      } else {
+        nextUrl = null;
+      }
     }
 
-    const data = await response.json();
-    console.log('[Dental] Service products data:', data);
-
-    // Support both paginated and plain list responses, including `data` wrappers
-    const items =
-      (Array.isArray(data) && data) ||
-      (Array.isArray(data?.results) && data.results) ||
-      (Array.isArray(data?.data) && data.data) ||
-      (Array.isArray(data?.data?.results) && data.data.results) ||
-      [];
-    serviceProducts = items;
+    serviceProducts = allItems;
     refreshProcedureOptions();
   } catch (err) {
-    console.error('[Dental] Error fetching service products:', err);
+    console.error('[Dental] Error fetching dental products:', err);
     serviceProductsFetchPromise = null;
   } finally {
     serviceProductsLoading = false;
@@ -274,20 +292,20 @@ function refreshProcedureOptions(scope) {
 
   if (serviceProductsLoading) {
     if (listEl) listEl.innerHTML = '';
-    setStatus('Loading service procedures...');
+    setStatus('Loading dental procedures...');
     return;
   }
 
   if (!serviceProducts || !serviceProducts.length) {
     if (listEl) listEl.innerHTML = '';
-    setStatus('No services loaded yet.');
+    setStatus('No dental procedures loaded yet.');
     return;
   }
 
   if (listEl) {
     const optionsHtml = serviceProducts
       .map((item) => {
-        const name = item.name || item.display_name || item.product_name || 'Unnamed service';
+        const name = item.name || item.display_name || item.product_name || 'Unnamed procedure';
         const price = item.list_price ?? item.lst_price ?? item.price;
         const label = price !== undefined ? `${name} - ${price}` : name;
         return `<option value="${escapeHtml(name)}" label="${escapeHtml(label)}"></option>`;
@@ -297,7 +315,7 @@ function refreshProcedureOptions(scope) {
     listEl.innerHTML = optionsHtml;
   }
 
-  setStatus(`Loaded ${serviceProducts.length} services`);
+  setStatus(`Loaded ${serviceProducts.length} procedures`);
 }
 
 // =========================
@@ -1074,7 +1092,7 @@ function renderTreatmentsTab(data) {
                 <div id="procedure_dropdown" style="display:none;position:absolute;z-index:10000;top:40px;left:0;width:100%;background:#fff;border:1px solid #e5e7eb;box-shadow:0 8px 22px rgba(0,0,0,0.12);border-radius:6px;max-height:260px;overflow-y:auto;">
                 </div>
               </div>
-              <div id="procedure_name_status" style="margin-top:4px;font-size:11px;color:#666;">Loading service procedures...</div>
+              <div id="procedure_name_status" style="margin-top:4px;font-size:11px;color:#666;">Loading dental procedures...</div>
             </div>
           <div>
             <label style="display:block;margin-bottom:4px;font-size:12px;font-weight:500;color:#333;">Treatment Status *</label>
@@ -1222,7 +1240,7 @@ function setupTreatmentForm(container) {
   const procedureStatus = container.querySelector('#procedure_name_status');
   let selectedProcedureId = null;
 
-  // Kick off background fetch for service procedures without blocking other calls
+  // Kick off background fetch for dental procedures without blocking other calls
   ensureServiceProductsFetching().then(() => refreshProcedureOptions(container));
   refreshProcedureOptions(container);
 
@@ -1239,7 +1257,7 @@ function setupTreatmentForm(container) {
   };
   ensureSpinnerKeyframes();
 
-  const getProcedureDisplayName = (item) => item?.name || item?.display_name || item?.product_name || 'Unnamed service';
+    const getProcedureDisplayName = (item) => item?.name || item?.display_name || item?.product_name || 'Unnamed procedure';
   const getProcedureId = (item) => item?.id ?? item?.product_id ?? item?.local_product_id ?? null;
 
   const getFilteredProcedures = () => {
@@ -1248,7 +1266,7 @@ function setupTreatmentForm(container) {
 
     const matches = serviceProducts.filter((item) => {
       const name = (item.name || item.display_name || item.product_name || '').toLowerCase();
-      const code = (item.default_code || '').toLowerCase();
+      const code = (item.default_code || item.product_code || '').toLowerCase();
       return !query || name.includes(query) || code.includes(query);
     });
 
@@ -1261,7 +1279,7 @@ function setupTreatmentForm(container) {
     return (
       serviceProducts.find((item) => {
         const name = (item.name || item.display_name || item.product_name || '').toLowerCase();
-        const code = (item.default_code || '').toLowerCase();
+        const code = (item.default_code || item.product_code || '').toLowerCase();
         return (name && name === target) || (code && code === target);
       }) || null
     );
@@ -1308,7 +1326,8 @@ function setupTreatmentForm(container) {
         .map((item, idx) => {
           const name = getProcedureDisplayName(item);
           const price = item.list_price ?? item.lst_price ?? item.price;
-          const code = item.default_code;
+          const code = item.default_code || item.product_code;
+          const categoryLabel = item.category_name || item.categ_id?.[1] || '';
           const pricePart = price !== undefined ? ` • ${price}` : '';
           const codePart = code ? ` (${code})` : '';
           const isActive = idx === highlightedProcedureIndex;
@@ -1329,7 +1348,7 @@ function setupTreatmentForm(container) {
             "
           >
             <div style="font-weight:600;color:#1f2937;pointer-events:none;">${escapeHtml(name)}${escapeHtml(codePart)}</div>
-            <div style="font-size:12px;color:#6b7280;pointer-events:none;">${escapeHtml(item.categ_id?.[1] || '')}${pricePart ? escapeHtml(pricePart) : ''}</div>
+            <div style="font-size:12px;color:#6b7280;pointer-events:none;">${escapeHtml(categoryLabel)}${pricePart ? escapeHtml(pricePart) : ''}</div>
           </div>
         `;
         })
