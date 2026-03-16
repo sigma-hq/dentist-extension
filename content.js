@@ -309,12 +309,6 @@ function validateAndGetToothInfo(toothNumber, numberingSystem = 'fdi') {
 // =========================
 
 async function backgroundFetch(url, options = {}) {
-  console.log('[Dental] backgroundFetch REQUEST:', {
-    url,
-    method: options.method || 'GET',
-    headers: options.headers
-  });
-  
   return new Promise((resolve, reject) => {
     chrome.runtime.sendMessage(
       {
@@ -328,25 +322,16 @@ async function backgroundFetch(url, options = {}) {
       },
       (response) => {
         if (chrome.runtime.lastError) {
-          console.error('[Dental] backgroundFetch ERROR:', chrome.runtime.lastError.message);
           reject(new Error(chrome.runtime.lastError.message));
           return;
         }
         
         if (response.error) {
-          console.error('[Dental] backgroundFetch FAILED:', response);
           const error = new Error(response.message);
           error.name = response.name;
           reject(error);
           return;
         }
-        
-        console.log('[Dental] backgroundFetch RESPONSE:', {
-          url,
-          status: response.status,
-          ok: response.ok,
-          data: response.data
-        });
         
         // Create a response-like object
         resolve({
@@ -515,18 +500,12 @@ async function fetchServiceProducts() {
   try {
     const baseUrl = await getApiEndpoint();
     const url = `${baseUrl}/api/products/dental/?page_size=100`;
-    console.log('[Dental] Fetching dental products (procedures):', url);
 
     const allItems = [];
     let nextUrl = url;
 
     while (nextUrl) {
       const response = await authenticatedFetch(nextUrl, { method: 'GET' });
-      console.log('[Dental] Dental products response:', {
-        url: nextUrl,
-        status: response.status,
-        ok: response.ok
-      });
 
       if (!response.ok) {
         const errorBody = await response.json().catch(() => ({}));
@@ -534,7 +513,6 @@ async function fetchServiceProducts() {
       }
 
       const data = await response.json();
-      console.log('[Dental] Dental products data:', data);
 
       const items =
         (Array.isArray(data) && data) ||
@@ -559,7 +537,6 @@ async function fetchServiceProducts() {
     serviceProducts = allItems;
     refreshProcedureOptions();
   } catch (err) {
-    console.error('[Dental] Error fetching dental products:', err);
     serviceProductsFetchPromise = null;
   } finally {
     serviceProductsLoading = false;
@@ -727,8 +704,8 @@ function buildOverlayShell() {
       refreshBtn.textContent = 'Refreshing...';
       try {
         await renderOverlayForPatient();
-      } catch (err) {
-        console.error('[Dental] Manual refresh failed:', err);
+      } catch (_err) {
+        // Refresh failed; UI state is reset in finally
       } finally {
         refreshInProgress = false;
         refreshBtn.textContent = originalText;
@@ -881,27 +858,15 @@ async function loadSummaryData(container) {
 
   ensureServiceProductsFetching().then(() => {
     refreshProcedureOptions(container);
-    renderProcedureDropdown();
   });
 
   try {
     const baseUrl = await getApiEndpoint();
     const url = `${baseUrl}/api/dental-appointments/summary/by-patient-uuid/${currentPatient.uuid}/`;
-    
-    console.log('[Dental] Fetching summary:', { url, patientUuid: currentPatient.uuid });
-    
+
     const response = await authenticatedFetch(url, { method: 'GET' });
 
-    console.log('[Dental] Response:', {
-      url,
-      status: response.status,
-      statusText: response.statusText,
-      ok: response.ok,
-      data: response.data
-    });
-
     if (!response.ok) {
-      console.log('[Dental] Response not OK:', response.status);
       
       if (response.status === 401) {
         await clearAuthTokens();
@@ -912,7 +877,6 @@ async function loadSummaryData(container) {
 
       // Treat 404 as "no dental data found" - this is a valid state, not an error
       if (response.status === 404) {
-        console.log('[Dental] 404 - No dental data found for patient');
         summaryData = {
           patient: currentPatient ? {
             customer_identifier: currentPatient.displayId || '',
@@ -930,18 +894,15 @@ async function loadSummaryData(container) {
       }
 
       const errorBody = await response.json().catch(() => ({}));
-      console.log('[Dental] Error body:', errorBody);
       const message = errorBody.detail || `Failed to load summary (HTTP ${response.status})`;
       container.innerHTML = renderErrorState(message);
       return;
     }
 
     summaryData = await response.json();
-    console.log('[Dental] Summary data loaded:', summaryData);
     setPatientLabel();
     renderTabs(container);
   } catch (err) {
-    console.error('[Dental] Error loading summary:', err);
     container.innerHTML = renderErrorState(err.message || 'Unable to reach the server.');
   }
 }
@@ -1544,6 +1505,7 @@ function setupTreatmentForm(container) {
   const quadrantInput = container.querySelector('#quadrant');
   
   let selectedProcedureId = null;
+  let procedureBlurCloseTimer = null;
 
   // Kick off background fetch for dental procedures without blocking other calls
   ensureServiceProductsFetching().then(() => refreshProcedureOptions(container));
@@ -1596,12 +1558,6 @@ function setupTreatmentForm(container) {
     toothTypeSelect.value = toothInfo.type || '';
     toothPositionSelect.value = toothInfo.position || '';
     quadrantInput.value = toothInfo.quadrant || '';
-    
-    console.log('[Dental] Auto-populated tooth fields:', {
-      toothNumber: result.toothNumber,
-      numberingSystem: result.numberingSystem,
-      toothInfo: toothInfo
-    });
   }
   
   // Continuation from line where it was cut off
@@ -1751,25 +1707,45 @@ function setupTreatmentForm(container) {
 
     const items = procedureDropdown.querySelectorAll('.procedure-dropdown-item');
     items.forEach((item) => {
-      item.addEventListener('mousedown', (e) => {
-        e.preventDefault();
-        const idx = Number(item.dataset.idx);
-        if (filtered[idx]) {
-          handleProcedureSelect(filtered[idx]);
-        }
-      });
-      
       item.addEventListener('mouseenter', () => {
         highlightedProcedureIndex = Number(item.dataset.idx);
-        renderProcedureDropdown();
+        // Just update highlight styles without re-rendering
+        items.forEach((el, i) => {
+          el.style.background = i === highlightedProcedureIndex ? '#eef4ff' : 'transparent';
+        });
       });
     });
   };
 
+  function onProcedureDropdownPointerDown(e) {
+    const item = e.target.closest('.procedure-dropdown-item');
+    if (!item) return;
+    e.preventDefault();
+    e.stopPropagation();
+    if (procedureBlurCloseTimer) {
+      clearTimeout(procedureBlurCloseTimer);
+      procedureBlurCloseTimer = null;
+    }
+    const idx = Number(item.dataset.idx);
+    const filtered = getFilteredProcedures();
+    const selected = filtered[idx];
+    if (selected) {
+      handleProcedureSelect(selected);
+    }
+  }
+
   const handleProcedureSelect = (item) => {
-    if (!procedureInput) return;
-    procedureInput.value = getProcedureDisplayName(item);
-    selectedProcedureId = getProcedureId(item);
+    const displayName = getProcedureDisplayName(item);
+    const id = getProcedureId(item);
+
+    const inputEl = container.querySelector('#procedure_name');
+    if (!inputEl) return;
+    if (procedureBlurCloseTimer) {
+      clearTimeout(procedureBlurCloseTimer);
+      procedureBlurCloseTimer = null;
+    }
+    inputEl.value = displayName;
+    selectedProcedureId = id;
     closeProcedureDropdown();
   };
 
@@ -1778,6 +1754,10 @@ function setupTreatmentForm(container) {
     highlightedProcedureIndex = 0;
     renderProcedureDropdown();
   };
+
+  if (procedureDropdown) {
+    procedureDropdown.addEventListener('mousedown', onProcedureDropdownPointerDown, true);
+  }
 
   if (procedureInput) {
     procedureInput.addEventListener('input', () => {
@@ -1793,6 +1773,14 @@ function setupTreatmentForm(container) {
 
     procedureInput.addEventListener('focus', () => {
       openProcedureDropdown();
+    });
+
+    procedureInput.addEventListener('blur', () => {
+      if (procedureBlurCloseTimer) clearTimeout(procedureBlurCloseTimer);
+      procedureBlurCloseTimer = setTimeout(() => {
+        procedureBlurCloseTimer = null;
+        closeProcedureDropdown();
+      }, 500);
     });
 
     procedureInput.addEventListener('keydown', (e) => {
@@ -1931,8 +1919,6 @@ function setupTreatmentForm(container) {
       if (resolvedProcedure !== null && resolvedProcedure !== undefined) {
         payload.procedure_product_id = resolvedProcedure;
       }
-
-      console.log('[Dental] Treatment payload:', payload);
 
       // Optional fields from advanced section
       const surface = container.querySelector('#surface').value.trim();
