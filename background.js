@@ -25,9 +25,7 @@ chrome.runtime.onMessage.addListener((request, _sender, sendResponse) => {
 
 async function handleFetch(request) {
   const { url, options } = request;
-  
-  console.log('[Background] Fetching:', url, options?.method || 'GET');
-  
+
   try {
     const response = await fetch(url, {
       method: options?.method || 'GET',
@@ -48,13 +46,6 @@ async function handleFetch(request) {
       data = text;
     }
     
-    console.log('[Background] Response:', {
-      url,
-      status: response.status,
-      ok: response.ok,
-      isJson
-    });
-    
     return {
       ok: response.ok,
       status: response.status,
@@ -64,8 +55,6 @@ async function handleFetch(request) {
       headers: Object.fromEntries(response.headers.entries())
     };
   } catch (error) {
-    console.error('[Background] Fetch error:', error);
-    
     return {
       error: true,
       message: error.message,

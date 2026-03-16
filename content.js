@@ -5,6 +5,11 @@ let collapsedView = null;
 let currentPatient = null;
 let summaryData = null;
 let isCollapsed = false;
+let serviceProducts = [];
+let serviceProductsFetchPromise = null;
+let serviceProductsLoading = false;
+let isUserAuthenticated = false;
+let refreshInProgress = false;
 
 const authTokens = {
   access: null,
@@ -12,16 +17,298 @@ const authTokens = {
 };
 
 // =========================
+// Tooth Numbering System Data
+// =========================
+
+const TOOTH_DATA = {
+  fdi: {
+    // FDI Two-Digit System (ISO 3950)
+    // Quadrant 1 (Upper Right): 11-18
+    11: { name: 'Upper Right Central Incisor', type: 'incisor', position: 'upper_right', quadrant: 1 },
+    12: { name: 'Upper Right Lateral Incisor', type: 'incisor', position: 'upper_right', quadrant: 1 },
+    13: { name: 'Upper Right Canine', type: 'canine', position: 'upper_right', quadrant: 1 },
+    14: { name: 'Upper Right First Premolar', type: 'premolar', position: 'upper_right', quadrant: 1 },
+    15: { name: 'Upper Right Second Premolar', type: 'premolar', position: 'upper_right', quadrant: 1 },
+    16: { name: 'Upper Right First Molar', type: 'molar', position: 'upper_right', quadrant: 1 },
+    17: { name: 'Upper Right Second Molar', type: 'molar', position: 'upper_right', quadrant: 1 },
+    18: { name: 'Upper Right Third Molar', type: 'molar', position: 'upper_right', quadrant: 1 },
+    
+    // Quadrant 2 (Upper Left): 21-28
+    21: { name: 'Upper Left Central Incisor', type: 'incisor', position: 'upper_left', quadrant: 2 },
+    22: { name: 'Upper Left Lateral Incisor', type: 'incisor', position: 'upper_left', quadrant: 2 },
+    23: { name: 'Upper Left Canine', type: 'canine', position: 'upper_left', quadrant: 2 },
+    24: { name: 'Upper Left First Premolar', type: 'premolar', position: 'upper_left', quadrant: 2 },
+    25: { name: 'Upper Left Second Premolar', type: 'premolar', position: 'upper_left', quadrant: 2 },
+    26: { name: 'Upper Left First Molar', type: 'molar', position: 'upper_left', quadrant: 2 },
+    27: { name: 'Upper Left Second Molar', type: 'molar', position: 'upper_left', quadrant: 2 },
+    28: { name: 'Upper Left Third Molar', type: 'molar', position: 'upper_left', quadrant: 2 },
+    
+    // Quadrant 3 (Lower Left): 31-38
+    31: { name: 'Lower Left Central Incisor', type: 'incisor', position: 'lower_left', quadrant: 3 },
+    32: { name: 'Lower Left Lateral Incisor', type: 'incisor', position: 'lower_left', quadrant: 3 },
+    33: { name: 'Lower Left Canine', type: 'canine', position: 'lower_left', quadrant: 3 },
+    34: { name: 'Lower Left First Premolar', type: 'premolar', position: 'lower_left', quadrant: 3 },
+    35: { name: 'Lower Left Second Premolar', type: 'premolar', position: 'lower_left', quadrant: 3 },
+    36: { name: 'Lower Left First Molar', type: 'molar', position: 'lower_left', quadrant: 3 },
+    37: { name: 'Lower Left Second Molar', type: 'molar', position: 'lower_left', quadrant: 3 },
+    38: { name: 'Lower Left Third Molar', type: 'molar', position: 'lower_left', quadrant: 3 },
+    
+    // Quadrant 4 (Lower Right): 41-48
+    41: { name: 'Lower Right Central Incisor', type: 'incisor', position: 'lower_right', quadrant: 4 },
+    42: { name: 'Lower Right Lateral Incisor', type: 'incisor', position: 'lower_right', quadrant: 4 },
+    43: { name: 'Lower Right Canine', type: 'canine', position: 'lower_right', quadrant: 4 },
+    44: { name: 'Lower Right First Premolar', type: 'premolar', position: 'lower_right', quadrant: 4 },
+    45: { name: 'Lower Right Second Premolar', type: 'premolar', position: 'lower_right', quadrant: 4 },
+    46: { name: 'Lower Right First Molar', type: 'molar', position: 'lower_right', quadrant: 4 },
+    47: { name: 'Lower Right Second Molar', type: 'molar', position: 'lower_right', quadrant: 4 },
+    48: { name: 'Lower Right Third Molar', type: 'molar', position: 'lower_right', quadrant: 4 },
+    
+    // Primary teeth (Deciduous) - Quadrants 5-8
+    51: { name: 'Upper Right Primary Central Incisor', type: 'incisor', position: 'upper_right', quadrant: 5, isPrimary: true },
+    52: { name: 'Upper Right Primary Lateral Incisor', type: 'incisor', position: 'upper_right', quadrant: 5, isPrimary: true },
+    53: { name: 'Upper Right Primary Canine', type: 'canine', position: 'upper_right', quadrant: 5, isPrimary: true },
+    54: { name: 'Upper Right Primary First Molar', type: 'molar', position: 'upper_right', quadrant: 5, isPrimary: true },
+    55: { name: 'Upper Right Primary Second Molar', type: 'molar', position: 'upper_right', quadrant: 5, isPrimary: true },
+    
+    61: { name: 'Upper Left Primary Central Incisor', type: 'incisor', position: 'upper_left', quadrant: 6, isPrimary: true },
+    62: { name: 'Upper Left Primary Lateral Incisor', type: 'incisor', position: 'upper_left', quadrant: 6, isPrimary: true },
+    63: { name: 'Upper Left Primary Canine', type: 'canine', position: 'upper_left', quadrant: 6, isPrimary: true },
+    64: { name: 'Upper Left Primary First Molar', type: 'molar', position: 'upper_left', quadrant: 6, isPrimary: true },
+    65: { name: 'Upper Left Primary Second Molar', type: 'molar', position: 'upper_left', quadrant: 6, isPrimary: true },
+    
+    71: { name: 'Lower Left Primary Central Incisor', type: 'incisor', position: 'lower_left', quadrant: 7, isPrimary: true },
+    72: { name: 'Lower Left Primary Lateral Incisor', type: 'incisor', position: 'lower_left', quadrant: 7, isPrimary: true },
+    73: { name: 'Lower Left Primary Canine', type: 'canine', position: 'lower_left', quadrant: 7, isPrimary: true },
+    74: { name: 'Lower Left Primary First Molar', type: 'molar', position: 'lower_left', quadrant: 7, isPrimary: true },
+    75: { name: 'Lower Left Primary Second Molar', type: 'molar', position: 'lower_left', quadrant: 7, isPrimary: true },
+    
+    81: { name: 'Lower Right Primary Central Incisor', type: 'incisor', position: 'lower_right', quadrant: 8, isPrimary: true },
+    82: { name: 'Lower Right Primary Lateral Incisor', type: 'incisor', position: 'lower_right', quadrant: 8, isPrimary: true },
+    83: { name: 'Lower Right Primary Canine', type: 'canine', position: 'lower_right', quadrant: 8, isPrimary: true },
+    84: { name: 'Lower Right Primary First Molar', type: 'molar', position: 'lower_right', quadrant: 8, isPrimary: true },
+    85: { name: 'Lower Right Primary Second Molar', type: 'molar', position: 'lower_right', quadrant: 8, isPrimary: true }
+  },
+  
+  universal: {
+    // Universal Numbering System (1-32 for permanent teeth)
+    1: { name: 'Upper Right Third Molar', type: 'molar', position: 'upper_right' },
+    2: { name: 'Upper Right Second Molar', type: 'molar', position: 'upper_right' },
+    3: { name: 'Upper Right First Molar', type: 'molar', position: 'upper_right' },
+    4: { name: 'Upper Right Second Premolar', type: 'premolar', position: 'upper_right' },
+    5: { name: 'Upper Right First Premolar', type: 'premolar', position: 'upper_right' },
+    6: { name: 'Upper Right Canine', type: 'canine', position: 'upper_right' },
+    7: { name: 'Upper Right Lateral Incisor', type: 'incisor', position: 'upper_right' },
+    8: { name: 'Upper Right Central Incisor', type: 'incisor', position: 'upper_right' },
+    9: { name: 'Upper Left Central Incisor', type: 'incisor', position: 'upper_left' },
+    10: { name: 'Upper Left Lateral Incisor', type: 'incisor', position: 'upper_left' },
+    11: { name: 'Upper Left Canine', type: 'canine', position: 'upper_left' },
+    12: { name: 'Upper Left First Premolar', type: 'premolar', position: 'upper_left' },
+    13: { name: 'Upper Left Second Premolar', type: 'premolar', position: 'upper_left' },
+    14: { name: 'Upper Left First Molar', type: 'molar', position: 'upper_left' },
+    15: { name: 'Upper Left Second Molar', type: 'molar', position: 'upper_left' },
+    16: { name: 'Upper Left Third Molar', type: 'molar', position: 'upper_left' },
+    17: { name: 'Lower Left Third Molar', type: 'molar', position: 'lower_left' },
+    18: { name: 'Lower Left Second Molar', type: 'molar', position: 'lower_left' },
+    19: { name: 'Lower Left First Molar', type: 'molar', position: 'lower_left' },
+    20: { name: 'Lower Left Second Premolar', type: 'premolar', position: 'lower_left' },
+    21: { name: 'Lower Left First Premolar', type: 'premolar', position: 'lower_left' },
+    22: { name: 'Lower Left Canine', type: 'canine', position: 'lower_left' },
+    23: { name: 'Lower Left Lateral Incisor', type: 'incisor', position: 'lower_left' },
+    24: { name: 'Lower Left Central Incisor', type: 'incisor', position: 'lower_left' },
+    25: { name: 'Lower Right Central Incisor', type: 'incisor', position: 'lower_right' },
+    26: { name: 'Lower Right Lateral Incisor', type: 'incisor', position: 'lower_right' },
+    27: { name: 'Lower Right Canine', type: 'canine', position: 'lower_right' },
+    28: { name: 'Lower Right First Premolar', type: 'premolar', position: 'lower_right' },
+    29: { name: 'Lower Right Second Premolar', type: 'premolar', position: 'lower_right' },
+    30: { name: 'Lower Right First Molar', type: 'molar', position: 'lower_right' },
+    31: { name: 'Lower Right Second Molar', type: 'molar', position: 'lower_right' },
+    32: { name: 'Lower Right Third Molar', type: 'molar', position: 'lower_right' },
+    
+    // Primary teeth (A-T)
+    'A': { name: 'Upper Right Primary Second Molar', type: 'molar', position: 'upper_right', isPrimary: true },
+    'B': { name: 'Upper Right Primary First Molar', type: 'molar', position: 'upper_right', isPrimary: true },
+    'C': { name: 'Upper Right Primary Canine', type: 'canine', position: 'upper_right', isPrimary: true },
+    'D': { name: 'Upper Right Primary Lateral Incisor', type: 'incisor', position: 'upper_right', isPrimary: true },
+    'E': { name: 'Upper Right Primary Central Incisor', type: 'incisor', position: 'upper_right', isPrimary: true },
+    'F': { name: 'Upper Left Primary Central Incisor', type: 'incisor', position: 'upper_left', isPrimary: true },
+    'G': { name: 'Upper Left Primary Lateral Incisor', type: 'incisor', position: 'upper_left', isPrimary: true },
+    'H': { name: 'Upper Left Primary Canine', type: 'canine', position: 'upper_left', isPrimary: true },
+    'I': { name: 'Upper Left Primary First Molar', type: 'molar', position: 'upper_left', isPrimary: true },
+    'J': { name: 'Upper Left Primary Second Molar', type: 'molar', position: 'upper_left', isPrimary: true },
+    'K': { name: 'Lower Left Primary Second Molar', type: 'molar', position: 'lower_left', isPrimary: true },
+    'L': { name: 'Lower Left Primary First Molar', type: 'molar', position: 'lower_left', isPrimary: true },
+    'M': { name: 'Lower Left Primary Canine', type: 'canine', position: 'lower_left', isPrimary: true },
+    'N': { name: 'Lower Left Primary Lateral Incisor', type: 'incisor', position: 'lower_left', isPrimary: true },
+    'O': { name: 'Lower Left Primary Central Incisor', type: 'incisor', position: 'lower_left', isPrimary: true },
+    'P': { name: 'Lower Right Primary Central Incisor', type: 'incisor', position: 'lower_right', isPrimary: true },
+    'Q': { name: 'Lower Right Primary Lateral Incisor', type: 'incisor', position: 'lower_right', isPrimary: true },
+    'R': { name: 'Lower Right Primary Canine', type: 'canine', position: 'lower_right', isPrimary: true },
+    'S': { name: 'Lower Right Primary First Molar', type: 'molar', position: 'lower_right', isPrimary: true },
+    'T': { name: 'Lower Right Primary Second Molar', type: 'molar', position: 'lower_right', isPrimary: true }
+  },
+  
+  palmer: {
+    // Palmer Notation uses quadrant symbols and numbers 1-8
+    // We'll use a string format like "UR1", "UL8", "LL3", "LR5"
+    'UR1': { name: 'Upper Right Central Incisor', type: 'incisor', position: 'upper_right' },
+    'UR2': { name: 'Upper Right Lateral Incisor', type: 'incisor', position: 'upper_right' },
+    'UR3': { name: 'Upper Right Canine', type: 'canine', position: 'upper_right' },
+    'UR4': { name: 'Upper Right First Premolar', type: 'premolar', position: 'upper_right' },
+    'UR5': { name: 'Upper Right Second Premolar', type: 'premolar', position: 'upper_right' },
+    'UR6': { name: 'Upper Right First Molar', type: 'molar', position: 'upper_right' },
+    'UR7': { name: 'Upper Right Second Molar', type: 'molar', position: 'upper_right' },
+    'UR8': { name: 'Upper Right Third Molar', type: 'molar', position: 'upper_right' },
+    
+    'UL1': { name: 'Upper Left Central Incisor', type: 'incisor', position: 'upper_left' },
+    'UL2': { name: 'Upper Left Lateral Incisor', type: 'incisor', position: 'upper_left' },
+    'UL3': { name: 'Upper Left Canine', type: 'canine', position: 'upper_left' },
+    'UL4': { name: 'Upper Left First Premolar', type: 'premolar', position: 'upper_left' },
+    'UL5': { name: 'Upper Left Second Premolar', type: 'premolar', position: 'upper_left' },
+    'UL6': { name: 'Upper Left First Molar', type: 'molar', position: 'upper_left' },
+    'UL7': { name: 'Upper Left Second Molar', type: 'molar', position: 'upper_left' },
+    'UL8': { name: 'Upper Left Third Molar', type: 'molar', position: 'upper_left' },
+    
+    'LL1': { name: 'Lower Left Central Incisor', type: 'incisor', position: 'lower_left' },
+    'LL2': { name: 'Lower Left Lateral Incisor', type: 'incisor', position: 'lower_left' },
+    'LL3': { name: 'Lower Left Canine', type: 'canine', position: 'lower_left' },
+    'LL4': { name: 'Lower Left First Premolar', type: 'premolar', position: 'lower_left' },
+    'LL5': { name: 'Lower Left Second Premolar', type: 'premolar', position: 'lower_left' },
+    'LL6': { name: 'Lower Left First Molar', type: 'molar', position: 'lower_left' },
+    'LL7': { name: 'Lower Left Second Molar', type: 'molar', position: 'lower_left' },
+    'LL8': { name: 'Lower Left Third Molar', type: 'molar', position: 'lower_left' },
+    
+    'LR1': { name: 'Lower Right Central Incisor', type: 'incisor', position: 'lower_right' },
+    'LR2': { name: 'Lower Right Lateral Incisor', type: 'incisor', position: 'lower_right' },
+    'LR3': { name: 'Lower Right Canine', type: 'canine', position: 'lower_right' },
+    'LR4': { name: 'Lower Right First Premolar', type: 'premolar', position: 'lower_right' },
+    'LR5': { name: 'Lower Right Second Premolar', type: 'premolar', position: 'lower_right' },
+    'LR6': { name: 'Lower Right First Molar', type: 'molar', position: 'lower_right' },
+    'LR7': { name: 'Lower Right Second Molar', type: 'molar', position: 'lower_right' },
+    'LR8': { name: 'Lower Right Third Molar', type: 'molar', position: 'lower_right' },
+    
+    // Primary teeth (lowercase letters)
+    'URA': { name: 'Upper Right Primary Central Incisor', type: 'incisor', position: 'upper_right', isPrimary: true },
+    'URB': { name: 'Upper Right Primary Lateral Incisor', type: 'incisor', position: 'upper_right', isPrimary: true },
+    'URC': { name: 'Upper Right Primary Canine', type: 'canine', position: 'upper_right', isPrimary: true },
+    'URD': { name: 'Upper Right Primary First Molar', type: 'molar', position: 'upper_right', isPrimary: true },
+    'URE': { name: 'Upper Right Primary Second Molar', type: 'molar', position: 'upper_right', isPrimary: true },
+    
+    'ULA': { name: 'Upper Left Primary Central Incisor', type: 'incisor', position: 'upper_left', isPrimary: true },
+    'ULB': { name: 'Upper Left Primary Lateral Incisor', type: 'incisor', position: 'upper_left', isPrimary: true },
+    'ULC': { name: 'Upper Left Primary Canine', type: 'canine', position: 'upper_left', isPrimary: true },
+    'ULD': { name: 'Upper Left Primary First Molar', type: 'molar', position: 'upper_left', isPrimary: true },
+    'ULE': { name: 'Upper Left Primary Second Molar', type: 'molar', position: 'upper_left', isPrimary: true },
+    
+    'LLA': { name: 'Lower Left Primary Central Incisor', type: 'incisor', position: 'lower_left', isPrimary: true },
+    'LLB': { name: 'Lower Left Primary Lateral Incisor', type: 'incisor', position: 'lower_left', isPrimary: true },
+    'LLC': { name: 'Lower Left Primary Canine', type: 'canine', position: 'lower_left', isPrimary: true },
+    'LLD': { name: 'Lower Left Primary First Molar', type: 'molar', position: 'lower_left', isPrimary: true },
+    'LLE': { name: 'Lower Left Primary Second Molar', type: 'molar', position: 'lower_left', isPrimary: true },
+    
+    'LRA': { name: 'Lower Right Primary Central Incisor', type: 'incisor', position: 'lower_right', isPrimary: true },
+    'LRB': { name: 'Lower Right Primary Lateral Incisor', type: 'incisor', position: 'lower_right', isPrimary: true },
+    'LRC': { name: 'Lower Right Primary Canine', type: 'canine', position: 'lower_right', isPrimary: true },
+    'LRD': { name: 'Lower Right Primary First Molar', type: 'molar', position: 'lower_right', isPrimary: true },
+    'LRE': { name: 'Lower Right Primary Second Molar', type: 'molar', position: 'lower_right', isPrimary: true }
+  }
+};
+
+function validateAndGetToothInfo(toothNumber, numberingSystem = 'fdi') {
+  const trimmed = String(toothNumber).trim().toUpperCase();
+  
+  if (!trimmed) {
+    return { valid: false, error: 'Tooth number is required' };
+  }
+  
+  let toothKey = trimmed;
+  
+  // FDI validation (default)
+  if (numberingSystem === 'fdi') {
+    // Must be exactly 2 digits
+    if (!/^\d{2}$/.test(trimmed)) {
+      return { valid: false, error: 'FDI tooth number must be exactly 2 digits (e.g., 11, 36, 48)' };
+    }
+    
+    const num = parseInt(trimmed, 10);
+    toothKey = num;
+    
+    if (!TOOTH_DATA.fdi[num]) {
+      return { valid: false, error: 'Invalid FDI tooth number. Valid ranges: 11-18, 21-28, 31-38, 41-48 (permanent), 51-55, 61-65, 71-75, 81-85 (primary)' };
+    }
+    
+    return {
+      valid: true,
+      toothInfo: TOOTH_DATA.fdi[num],
+      toothNumber: trimmed,
+      numberingSystem: 'fdi'
+    };
+  }
+  
+  // Universal validation
+  if (numberingSystem === 'universal') {
+    // Check if it's a letter (primary teeth A-T)
+    if (/^[A-T]$/i.test(trimmed)) {
+      const upperLetter = trimmed.toUpperCase();
+      if (!TOOTH_DATA.universal[upperLetter]) {
+        return { valid: false, error: 'Invalid Universal tooth letter. Valid letters: A-T for primary teeth' };
+      }
+      
+      return {
+        valid: true,
+        toothInfo: TOOTH_DATA.universal[upperLetter],
+        toothNumber: upperLetter,
+        numberingSystem: 'universal'
+      };
+    }
+    
+    // Otherwise it should be a number 1-32
+    if (!/^\d{1,2}$/.test(trimmed)) {
+      return { valid: false, error: 'Universal tooth number must be 1-32 or A-T' };
+    }
+    
+    const num = parseInt(trimmed, 10);
+    toothKey = num;
+    
+    if (num < 1 || num > 32 || !TOOTH_DATA.universal[num]) {
+      return { valid: false, error: 'Universal tooth number must be between 1 and 32, or A-T for primary teeth' };
+    }
+    
+    return {
+      valid: true,
+      toothInfo: TOOTH_DATA.universal[num],
+      toothNumber: trimmed,
+      numberingSystem: 'universal'
+    };
+  }
+  
+  // Palmer validation
+  if (numberingSystem === 'palmer') {
+    // Accept formats like "UR1", "UL8", "LL3", "LR5" for permanent
+    // or "URA", "ULE", "LLD" for primary
+    if (!/^[UL][RL](\d|[A-E])$/i.test(trimmed)) {
+      return { valid: false, error: 'Palmer notation must be in format: UR1-8, UL1-8, LL1-8, LR1-8 (or URA-E, ULA-E, etc. for primary)' };
+    }
+    
+    if (!TOOTH_DATA.palmer[trimmed]) {
+      return { valid: false, error: 'Invalid Palmer notation. Examples: UR1, UL8, LL3, LR5 (or URA, ULE for primary)' };
+    }
+    
+    return {
+      valid: true,
+      toothInfo: TOOTH_DATA.palmer[trimmed],
+      toothNumber: trimmed,
+      numberingSystem: 'palmer'
+    };
+  }
+  
+  return { valid: false, error: 'Unknown numbering system' };
+}
+
+// =========================
 // Background Fetch Helper (bypasses mixed content and CORS)
 // =========================
 
 async function backgroundFetch(url, options = {}) {
-  console.log('[Dental] backgroundFetch REQUEST:', {
-    url,
-    method: options.method || 'GET',
-    headers: options.headers
-  });
-  
   return new Promise((resolve, reject) => {
     chrome.runtime.sendMessage(
       {
@@ -35,25 +322,16 @@ async function backgroundFetch(url, options = {}) {
       },
       (response) => {
         if (chrome.runtime.lastError) {
-          console.error('[Dental] backgroundFetch ERROR:', chrome.runtime.lastError.message);
           reject(new Error(chrome.runtime.lastError.message));
           return;
         }
         
         if (response.error) {
-          console.error('[Dental] backgroundFetch FAILED:', response);
           const error = new Error(response.message);
           error.name = response.name;
           reject(error);
           return;
         }
-        
-        console.log('[Dental] backgroundFetch RESPONSE:', {
-          url,
-          status: response.status,
-          ok: response.ok,
-          data: response.data
-        });
         
         // Create a response-like object
         resolve({
@@ -194,6 +472,117 @@ async function authenticatedFetch(url, options = {}) {
   return response;
 }
 
+function escapeHtml(value) {
+  if (value === undefined || value === null) return '';
+  return String(value)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#039;');
+}
+
+// =========================
+// Service products (procedure list)
+// =========================
+
+function ensureServiceProductsFetching() {
+  if (!serviceProductsFetchPromise) {
+    serviceProductsFetchPromise = fetchServiceProducts();
+  }
+  return serviceProductsFetchPromise;
+}
+
+async function fetchServiceProducts() {
+  serviceProductsLoading = true;
+  refreshProcedureOptions();
+
+  try {
+    const baseUrl = await getApiEndpoint();
+    const url = `${baseUrl}/api/products/dental/?page_size=100`;
+
+    const allItems = [];
+    let nextUrl = url;
+
+    while (nextUrl) {
+      const response = await authenticatedFetch(nextUrl, { method: 'GET' });
+
+      if (!response.ok) {
+        const errorBody = await response.json().catch(() => ({}));
+        throw new Error(errorBody.detail || errorBody.message || `Failed to load dental products (HTTP ${response.status})`);
+      }
+
+      const data = await response.json();
+
+      const items =
+        (Array.isArray(data) && data) ||
+        (Array.isArray(data?.results) && data.results) ||
+        (Array.isArray(data?.data) && data.data) ||
+        (Array.isArray(data?.data?.results) && data.data.results) ||
+        [];
+      if (items.length) {
+        allItems.push(...items);
+      }
+
+      const nextValue = data?.next ?? data?.data?.next ?? null;
+      if (typeof nextValue === 'string' && nextValue.length > 0) {
+        nextUrl = nextValue.startsWith('http')
+          ? nextValue
+          : `${baseUrl}${nextValue.startsWith('/') ? '' : '/'}${nextValue}`;
+      } else {
+        nextUrl = null;
+      }
+    }
+
+    serviceProducts = allItems;
+    refreshProcedureOptions();
+  } catch (err) {
+    serviceProductsFetchPromise = null;
+  } finally {
+    serviceProductsLoading = false;
+    refreshProcedureOptions();
+  }
+}
+
+function refreshProcedureOptions(scope) {
+  const context = scope || overlay || document;
+  if (!context) return;
+
+  const listEl = context.querySelector('#procedure_name_options');
+  const statusEl = context.querySelector('#procedure_name_status');
+
+  const setStatus = (text) => {
+    if (statusEl) statusEl.textContent = text;
+  };
+
+  if (serviceProductsLoading) {
+    if (listEl) listEl.innerHTML = '';
+    setStatus('Loading dental procedures...');
+    return;
+  }
+
+  if (!serviceProducts || !serviceProducts.length) {
+    if (listEl) listEl.innerHTML = '';
+    setStatus('No dental procedures loaded yet.');
+    return;
+  }
+
+  if (listEl) {
+    const optionsHtml = serviceProducts
+      .map((item) => {
+        const name = item.name || item.display_name || item.product_name || 'Unnamed procedure';
+        const price = item.list_price ?? item.lst_price ?? item.price;
+        const label = price !== undefined ? `${name} - ${price}` : name;
+        return `<option value="${escapeHtml(name)}" label="${escapeHtml(label)}"></option>`;
+      })
+      .join('');
+
+    listEl.innerHTML = optionsHtml;
+  }
+
+  setStatus(`Loaded ${serviceProducts.length} procedures`);
+}
+
 // =========================
 // Patient detection
 // =========================
@@ -218,6 +607,7 @@ function extractPatient() {
   if (uuid && (!currentPatient || currentPatient.uuid !== uuid)) {
     currentPatient = { uuid, displayId };
     summaryData = null;
+    updateRefreshButtonState();
     renderOverlayForPatient();
   }
 }
@@ -254,6 +644,7 @@ function buildOverlayShell() {
           <div id="dentist-patient-label" style="font-size:12px;opacity:0.85;margin-top:2px;">Loading patient...</div>
         </div>
         <div style="display:flex;align-items:center;gap:8px;">
+          <button id="dentist-refresh-btn" title="Refresh summary" style="background:none;border:1px solid rgba(255,255,255,0.4);color:#fff;padding:6px 10px;border-radius:6px;cursor:pointer;font-size:12px;">Refresh</button>
           <button id="dentist-settings-btn" title="Settings" style="background:none;border:1px solid rgba(255,255,255,0.4);color:#fff;padding:6px 10px;border-radius:6px;cursor:pointer;font-size:12px;">Settings</button>
           <button id="dentist-logout-btn" title="Sign out" style="background:#c62828;border:none;color:#fff;padding:6px 10px;border-radius:6px;cursor:pointer;font-size:12px;display:none;">Logout</button>
           <button id="dentist-minimize-btn" title="Minimize" style="background:none;border:none;font-size:20px;cursor:pointer;color:white;padding:0 4px;">−</button>
@@ -303,11 +694,32 @@ function buildOverlayShell() {
     renderSettings();
   });
 
+  const refreshBtn = overlay.querySelector('#dentist-refresh-btn');
+  if (refreshBtn) {
+    refreshBtn.addEventListener('click', async () => {
+      if (!currentPatient || refreshInProgress) return;
+      refreshInProgress = true;
+      const originalText = refreshBtn.textContent;
+      refreshBtn.disabled = true;
+      refreshBtn.textContent = 'Refreshing...';
+      try {
+        await renderOverlayForPatient();
+      } catch (_err) {
+        // Refresh failed; UI state is reset in finally
+      } finally {
+        refreshInProgress = false;
+        refreshBtn.textContent = originalText;
+        updateRefreshButtonState();
+      }
+    });
+  }
+
   overlay.querySelector('#dentist-logout-btn').addEventListener('click', async () => {
     await clearAuthTokens();
     summaryData = null;
     renderOverlayForPatient();
   });
+  updateRefreshButtonState();
 }
 
 function setPatientLabel() {
@@ -323,10 +735,19 @@ function setPatientLabel() {
   labelEl.textContent = pieces.join(' • ');
 }
 
+function updateRefreshButtonState() {
+  const refreshBtn = overlay?.querySelector('#dentist-refresh-btn');
+  if (!refreshBtn) return;
+  refreshBtn.disabled = !currentPatient || refreshInProgress || !isUserAuthenticated;
+}
+
 function setAuthUiState(authenticated) {
+  isUserAuthenticated = authenticated;
   const logoutBtn = overlay?.querySelector('#dentist-logout-btn');
-  if (!logoutBtn) return;
-  logoutBtn.style.display = authenticated ? 'inline-block' : 'none';
+  if (logoutBtn) {
+    logoutBtn.style.display = authenticated ? 'inline-block' : 'none';
+  }
+  updateRefreshButtonState();
 }
 
 // =========================
@@ -435,24 +856,17 @@ async function loadSummaryData(container) {
     <style>@keyframes spin { to { transform: rotate(360deg); } }</style>
   `;
 
+  ensureServiceProductsFetching().then(() => {
+    refreshProcedureOptions(container);
+  });
+
   try {
     const baseUrl = await getApiEndpoint();
     const url = `${baseUrl}/api/dental-appointments/summary/by-patient-uuid/${currentPatient.uuid}/`;
-    
-    console.log('[Dental] Fetching summary:', { url, patientUuid: currentPatient.uuid });
-    
+
     const response = await authenticatedFetch(url, { method: 'GET' });
 
-    console.log('[Dental] Response:', {
-      url,
-      status: response.status,
-      statusText: response.statusText,
-      ok: response.ok,
-      data: response.data
-    });
-
     if (!response.ok) {
-      console.log('[Dental] Response not OK:', response.status);
       
       if (response.status === 401) {
         await clearAuthTokens();
@@ -463,7 +877,6 @@ async function loadSummaryData(container) {
 
       // Treat 404 as "no dental data found" - this is a valid state, not an error
       if (response.status === 404) {
-        console.log('[Dental] 404 - No dental data found for patient');
         summaryData = {
           patient: currentPatient ? {
             customer_identifier: currentPatient.displayId || '',
@@ -481,18 +894,15 @@ async function loadSummaryData(container) {
       }
 
       const errorBody = await response.json().catch(() => ({}));
-      console.log('[Dental] Error body:', errorBody);
       const message = errorBody.detail || `Failed to load summary (HTTP ${response.status})`;
       container.innerHTML = renderErrorState(message);
       return;
     }
 
     summaryData = await response.json();
-    console.log('[Dental] Summary data loaded:', summaryData);
     setPatientLabel();
     renderTabs(container);
   } catch (err) {
-    console.error('[Dental] Error loading summary:', err);
     container.innerHTML = renderErrorState(err.message || 'Unable to reach the server.');
   }
 }
@@ -736,10 +1146,12 @@ function renderScreeningTab(screeningData) {
 
   const conditionsHtml = pageConditions.map(condition => {
     const value = screeningData.screening[condition.key] || false;
-    const yesColor = value ? '#4CAF50' : '#e0e0e0';
-    const noColor = !value ? '#333' : '#e0e0e0';
-    const yesBg = value ? '#e8f5e9' : 'transparent';
-    const noBg = !value ? '#f5f5f5' : 'transparent';
+    const yesColor = value ? '#ffffff' : '#333';
+    const noColor = !value ? '#ffffff' : '#333';
+    const yesBg = value ? '#4CAF50' : '#ffffff';
+    const noBg = !value ? '#666' : '#ffffff';
+    const yesBorder = value ? '#4CAF50' : '#999';
+    const noBorder = !value ? '#666' : '#999';
 
     return `
       <div style="display:flex;justify-content:space-between;align-items:center;padding:12px 0;border-bottom:1px solid #f0f0f0;">
@@ -749,14 +1161,14 @@ function renderScreeningTab(screeningData) {
             data-condition="${condition.key}" 
             data-value="true"
             class="screening-yes-btn"
-            style="background:${yesBg};color:${yesColor};border:1px solid ${yesColor};padding:6px 20px;border-radius:20px;font-size:12px;font-weight:${value ? '600' : '500'};cursor:default;transition:all 0.2s;"
+            style="background:${yesBg};color:${yesColor};border:2px solid ${yesBorder};padding:7px 22px;border-radius:20px;font-size:13px;font-weight:600;cursor:default;transition:all 0.2s;min-width:60px;opacity:1;"
             disabled
           >Yes</button>
           <button 
             data-condition="${condition.key}" 
             data-value="false"
             class="screening-no-btn"
-            style="background:${noBg};color:${noColor};border:1px solid ${noColor};padding:6px 20px;border-radius:20px;font-size:12px;font-weight:${!value ? '600' : '500'};cursor:default;transition:all 0.2s;"
+            style="background:${noBg};color:${noColor};border:2px solid ${noBorder};padding:7px 22px;border-radius:20px;font-size:13px;font-weight:600;cursor:default;transition:all 0.2s;min-width:60px;opacity:1;"
             disabled
           >No</button>
         </div>
@@ -797,10 +1209,12 @@ function renderScreeningTab(screeningData) {
 
       return pageConditions.map(condition => {
         const value = screeningData.screening[condition.key] || false;
-        const yesColor = value ? '#4CAF50' : '#e0e0e0';
-        const noColor = !value ? '#333' : '#e0e0e0';
-        const yesBg = value ? '#e8f5e9' : 'transparent';
-        const noBg = !value ? '#f5f5f5' : 'transparent';
+        const yesColor = value ? '#ffffff' : '#333';
+        const noColor = !value ? '#ffffff' : '#333';
+        const yesBg = value ? '#4CAF50' : '#ffffff';
+        const noBg = !value ? '#666' : '#ffffff';
+        const yesBorder = value ? '#4CAF50' : '#999';
+        const noBorder = !value ? '#666' : '#999';
 
         return `
           <div style="display:flex;justify-content:space-between;align-items:center;padding:12px 0;border-bottom:1px solid #f0f0f0;">
@@ -810,14 +1224,14 @@ function renderScreeningTab(screeningData) {
                 data-condition="${condition.key}" 
                 data-value="true"
                 class="screening-yes-btn"
-                style="background:${yesBg};color:${yesColor};border:1px solid ${yesColor};padding:6px 20px;border-radius:20px;font-size:12px;font-weight:${value ? '600' : '500'};cursor:default;transition:all 0.2s;"
+                style="background:${yesBg};color:${yesColor};border:2px solid ${yesBorder};padding:7px 22px;border-radius:20px;font-size:13px;font-weight:600;cursor:default;transition:all 0.2s;min-width:60px;opacity:1;"
                 disabled
               >Yes</button>
               <button 
                 data-condition="${condition.key}" 
                 data-value="false"
                 class="screening-no-btn"
-                style="background:${noBg};color:${noColor};border:1px solid ${noColor};padding:6px 20px;border-radius:20px;font-size:12px;font-weight:${!value ? '600' : '500'};cursor:default;transition:all 0.2s;"
+                style="background:${noBg};color:${noColor};border:2px solid ${noBorder};padding:7px 22px;border-radius:20px;font-size:13px;font-weight:600;cursor:default;transition:all 0.2s;min-width:60px;opacity:1;"
                 disabled
               >No</button>
             </div>
@@ -913,16 +1327,24 @@ function renderTreatmentsTab(data) {
         <div style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;">
           <div>
             <label style="display:block;margin-bottom:4px;font-size:12px;font-weight:500;color:#333;">Tooth Number *</label>
-            <input type="text" id="tooth_number" required placeholder="e.g., 14, 36" style="width:100%;padding:8px;border:1px solid #ddd;border-radius:4px;font-size:13px;box-sizing:border-box;height:36px;background:#fff;" />
+            <input type="text" id="tooth_number" required placeholder="e.g., 14, 36, 48" style="width:100%;padding:8px;border:1px solid #ddd;border-radius:4px;font-size:13px;box-sizing:border-box;height:36px;background:#fff;" />
+            <div id="tooth_number_error" style="color:#c62828;font-size:11px;margin-top:3px;display:none;"></div>
+            <div id="tooth_number_hint" style="color:#666;font-size:11px;margin-top:3px;">FDI: 2 digits (11-48)</div>
           </div>
           <div>
             <label style="display:block;margin-bottom:4px;font-size:12px;font-weight:500;color:#333;">Treatment Date *</label>
             <input type="date" id="treatment_date" required style="width:100%;padding:8px;border:1px solid #ddd;border-radius:4px;font-size:13px;box-sizing:border-box;height:36px;background:#fff;" />
           </div>
-          <div>
-            <label style="display:block;margin-bottom:4px;font-size:12px;font-weight:500;color:#333;">Procedure Name *</label>
-            <input type="text" id="procedure_name" required placeholder="e.g., Composite filling" style="width:100%;padding:8px;border:1px solid #ddd;border-radius:4px;font-size:13px;box-sizing:border-box;height:36px;background:#fff;" />
-          </div>
+            <div>
+              <label style="display:block;margin-bottom:4px;font-size:12px;font-weight:500;color:#333;">Procedure Name *</label>
+              <div id="procedure_input_wrapper" style="position:relative;">
+                <input type="text" id="procedure_name" autocomplete="off" required placeholder="Search or type a procedure" style="width:100%;padding:8px;border:1px solid #ddd;border-radius:4px;font-size:13px;box-sizing:border-box;height:36px;background:#fff;outline:none;" />
+                <div id="procedure_input_spinner" style="display:none;position:absolute;right:10px;top:50%;transform:translateY(-50%);width:16px;height:16px;border:2px solid #e0e0e0;border-top-color:#00695C;border-radius:50%;animation:spin 0.9s linear infinite;"></div>
+                <div id="procedure_dropdown" style="display:none;position:absolute;z-index:10000;top:40px;left:0;width:100%;background:#fff;border:1px solid #e5e7eb;box-shadow:0 8px 22px rgba(0,0,0,0.12);border-radius:6px;max-height:260px;overflow-y:auto;">
+                </div>
+              </div>
+              <div id="procedure_name_status" style="margin-top:4px;font-size:11px;color:#666;">Loading dental procedures...</div>
+            </div>
           <div>
             <label style="display:block;margin-bottom:4px;font-size:12px;font-weight:500;color:#333;">Treatment Status *</label>
             <select id="treatment_status" required style="width:100%;padding:8px;border:1px solid #ddd;border-radius:4px;font-size:13px;box-sizing:border-box;height:36px;background:#fff;">
@@ -964,19 +1386,19 @@ function renderTreatmentsTab(data) {
             <div>
               <label style="display:block;margin-bottom:4px;font-size:12px;font-weight:500;color:#333;">Numbering System</label>
               <select id="numbering_system" style="width:100%;padding:8px;border:1px solid #ddd;border-radius:4px;font-size:13px;box-sizing:border-box;height:36px;background:#fff;">
+                <option value="fdi" selected>FDI (Default)</option>
                 <option value="universal">Universal</option>
-                <option value="fdi">FDI</option>
                 <option value="palmer">Palmer</option>
               </select>
             </div>
             <div>
               <label style="display:block;margin-bottom:4px;font-size:12px;font-weight:500;color:#333;">Tooth Name</label>
-              <input type="text" id="tooth_name" placeholder="e.g., Lower left first molar" style="width:100%;padding:8px;border:1px solid #ddd;border-radius:4px;font-size:13px;box-sizing:border-box;" />
+              <input type="text" id="tooth_name" readonly placeholder="Auto-filled from tooth number" style="width:100%;padding:8px;border:1px solid #ddd;border-radius:4px;font-size:13px;box-sizing:border-box;background:#f9f9f9;" />
             </div>
             <div>
               <label style="display:block;margin-bottom:4px;font-size:12px;font-weight:500;color:#333;">Tooth Type</label>
-              <select id="tooth_type" style="width:100%;padding:8px;border:1px solid #ddd;border-radius:4px;font-size:13px;box-sizing:border-box;height:36px;background:#fff;">
-                <option value="">Select type</option>
+              <select id="tooth_type" disabled style="width:100%;padding:8px;border:1px solid #ddd;border-radius:4px;font-size:13px;box-sizing:border-box;height:36px;background:#f9f9f9;">
+                <option value="">Auto-filled from tooth number</option>
                 <option value="incisor">Incisor</option>
                 <option value="canine">Canine</option>
                 <option value="premolar">Premolar</option>
@@ -985,13 +1407,17 @@ function renderTreatmentsTab(data) {
             </div>
             <div>
               <label style="display:block;margin-bottom:4px;font-size:12px;font-weight:500;color:#333;">Tooth Position</label>
-              <select id="tooth_position" style="width:100%;padding:8px;border:1px solid #ddd;border-radius:4px;font-size:13px;box-sizing:border-box;height:36px;background:#fff;">
-                <option value="">Select position</option>
+              <select id="tooth_position" disabled style="width:100%;padding:8px;border:1px solid #ddd;border-radius:4px;font-size:13px;box-sizing:border-box;height:36px;background:#f9f9f9;">
+                <option value="">Auto-filled from tooth number</option>
                 <option value="upper_right">Upper Right</option>
                 <option value="upper_left">Upper Left</option>
                 <option value="lower_right">Lower Right</option>
                 <option value="lower_left">Lower Left</option>
               </select>
+            </div>
+            <div>
+              <label style="display:block;margin-bottom:4px;font-size:12px;font-weight:500;color:#333;">Quadrant</label>
+              <input type="text" id="quadrant" readonly placeholder="Auto-filled from tooth number" style="width:100%;padding:8px;border:1px solid #ddd;border-radius:4px;font-size:13px;box-sizing:border-box;background:#f9f9f9;" />
             </div>
             <div>
               <label style="display:block;margin-bottom:4px;font-size:12px;font-weight:500;color:#333;">Surface</label>
@@ -1062,6 +1488,349 @@ function setupTreatmentForm(container) {
   const followUpSection = container.querySelector('#follow_up_section');
   const errorDiv = container.querySelector('#dentist-treatment-error');
   const successDiv = container.querySelector('#dentist-treatment-success');
+  const procedureInput = container.querySelector('#procedure_name');
+  const procedureWrapper = container.querySelector('#procedure_input_wrapper');
+  const procedureDropdown = container.querySelector('#procedure_dropdown');
+  const procedureSpinner = container.querySelector('#procedure_input_spinner');
+  const procedureStatus = container.querySelector('#procedure_name_status');
+  
+  // Tooth number fields
+  const toothNumberInput = container.querySelector('#tooth_number');
+  const toothNumberError = container.querySelector('#tooth_number_error');
+  const toothNumberHint = container.querySelector('#tooth_number_hint');
+  const numberingSystemSelect = container.querySelector('#numbering_system');
+  const toothNameInput = container.querySelector('#tooth_name');
+  const toothTypeSelect = container.querySelector('#tooth_type');
+  const toothPositionSelect = container.querySelector('#tooth_position');
+  const quadrantInput = container.querySelector('#quadrant');
+  
+  let selectedProcedureId = null;
+  let procedureBlurCloseTimer = null;
+
+  // Kick off background fetch for dental procedures without blocking other calls
+  ensureServiceProductsFetching().then(() => refreshProcedureOptions(container));
+  refreshProcedureOptions(container);
+
+  // =========================
+  // Tooth Number Auto-Population Logic
+  // =========================
+  
+  function updateToothFields() {
+    const toothNumber = toothNumberInput.value.trim();
+    const numberingSystem = numberingSystemSelect.value;
+    
+    // Clear previous error
+    toothNumberError.style.display = 'none';
+    toothNumberError.textContent = '';
+    
+    if (!toothNumber) {
+      // Clear all fields
+      toothNameInput.value = '';
+      toothTypeSelect.value = '';
+      toothPositionSelect.value = '';
+      quadrantInput.value = '';
+      return;
+    }
+    
+    // Validate tooth number
+    const result = validateAndGetToothInfo(toothNumber, numberingSystem);
+    
+    if (!result.valid) {
+      // Show error
+      toothNumberError.textContent = result.error;
+      toothNumberError.style.display = 'block';
+      toothNumberInput.style.borderColor = '#c62828';
+      
+      // Clear auto-filled fields
+      toothNameInput.value = '';
+      toothTypeSelect.value = '';
+      toothPositionSelect.value = '';
+      quadrantInput.value = '';
+      return;
+    }
+    
+    // Valid tooth number - populate fields
+    toothNumberInput.style.borderColor = '#4CAF50';
+    const toothInfo = result.toothInfo;
+    
+    // Populate fields
+    toothNameInput.value = toothInfo.name || '';
+    toothTypeSelect.value = toothInfo.type || '';
+    toothPositionSelect.value = toothInfo.position || '';
+    quadrantInput.value = toothInfo.quadrant || '';
+  }
+  
+  // Continuation from line where it was cut off
+
+  function updateToothNumberHint() {
+    const numberingSystem = numberingSystemSelect.value;
+    
+    switch (numberingSystem) {
+      case 'fdi':
+        toothNumberHint.textContent = 'FDI: 2 digits (11-48, 51-85 for primary)';
+        toothNumberInput.placeholder = 'e.g., 11, 36, 48';
+        break;
+      case 'universal':
+        toothNumberHint.textContent = 'Universal: 1-32 or A-T for primary';
+        toothNumberInput.placeholder = 'e.g., 1, 14, 32, A, T';
+        break;
+      case 'palmer':
+        toothNumberHint.textContent = 'Palmer: UR1-8, UL1-8, LL1-8, LR1-8';
+        toothNumberInput.placeholder = 'e.g., UR1, LL6, UL8';
+        break;
+    }
+  }
+  
+  // Initial hint setup
+  updateToothNumberHint();
+  
+  // Event listeners for auto-population
+  toothNumberInput.addEventListener('input', updateToothFields);
+  numberingSystemSelect.addEventListener('change', () => {
+    updateToothNumberHint();
+    updateToothFields();
+  });
+
+  // --- Procedure autocomplete dropdown ---
+  let isProcedureDropdownOpen = false;
+  let highlightedProcedureIndex = 0;
+
+  const ensureSpinnerKeyframes = () => {
+    if (document.getElementById('dentist-spinner-style')) return;
+    const style = document.createElement('style');
+    style.id = 'dentist-spinner-style';
+    style.textContent = '@keyframes spin { to { transform: rotate(360deg); } }';
+    document.head.appendChild(style);
+  };
+  ensureSpinnerKeyframes();
+
+  const getProcedureDisplayName = (item) => item?.name || item?.display_name || item?.product_name || 'Unnamed procedure';
+  const getProcedureId = (item) => item?.id ?? item?.product_id ?? item?.local_product_id ?? null;
+
+  const getFilteredProcedures = () => {
+    const query = procedureInput?.value?.trim().toLowerCase() || '';
+    if (!serviceProducts || !serviceProducts.length) return [];
+
+    const matches = serviceProducts.filter((item) => {
+      const name = (item.name || item.display_name || item.product_name || '').toLowerCase();
+      const code = (item.default_code || item.product_code || '').toLowerCase();
+      return !query || name.includes(query) || code.includes(query);
+    });
+
+    return matches.slice(0, 50);
+  };
+
+  const findProcedureByNameOrCode = (value) => {
+    if (!value || !serviceProducts?.length) return null;
+    const target = value.trim().toLowerCase();
+    return (
+      serviceProducts.find((item) => {
+        const name = (item.name || item.display_name || item.product_name || '').toLowerCase();
+        const code = (item.default_code || item.product_code || '').toLowerCase();
+        return (name && name === target) || (code && code === target);
+      }) || null
+    );
+  };
+
+  const closeProcedureDropdown = () => {
+    isProcedureDropdownOpen = false;
+    if (procedureDropdown) {
+      procedureDropdown.style.display = 'none';
+    }
+  };
+
+  const renderProcedureDropdown = () => {
+    if (!procedureDropdown || !procedureInput || !procedureWrapper) return;
+
+    if (procedureSpinner) {
+      procedureSpinner.style.display = serviceProductsLoading ? 'block' : 'none';
+    }
+
+    const filtered = getFilteredProcedures();
+
+    if (!isProcedureDropdownOpen) {
+      procedureDropdown.style.display = 'none';
+      return;
+    }
+
+    let inner = '';
+
+    if (serviceProductsLoading) {
+      inner = `
+        <div style="display:flex;align-items:center;justify-content:center;padding:12px;font-size:12px;color:#555;gap:8px;">
+          <div style="width:14px;height:14px;border:2px solid #e0e0e0;border-top-color:#00695C;border-radius:50%;animation:spin 0.9s linear infinite;"></div>
+          <span>Loading procedures...</span>
+        </div>
+      `;
+    } else if (filtered.length === 0) {
+      inner = `
+        <div style="padding:12px;font-size:12px;color:#666;">
+          No procedures found. Continue typing to add a custom name.
+        </div>
+      `;
+    } else {
+      inner = filtered
+        .map((item, idx) => {
+          const name = getProcedureDisplayName(item);
+          const price = item.list_price ?? item.lst_price ?? item.price;
+          const code = item.default_code || item.product_code;
+          const categoryLabel = item.category_name || item.categ_id?.[1] || '';
+          const pricePart = price !== undefined ? ` • ${price}` : '';
+          const codePart = code ? ` (${code})` : '';
+          const isActive = idx === highlightedProcedureIndex;
+          return `
+          <div
+            class="procedure-dropdown-item"
+            data-idx="${idx}"
+            style="
+              width:100%;
+              display:block;
+              text-align:left;
+              background:${isActive ? '#eef4ff' : 'transparent'};
+              padding:10px 12px;
+              cursor:pointer;
+              font-size:13px;
+              transition:background 0.15s ease;
+              color:#1f2937;
+            "
+          >
+            <div style="font-weight:600;color:#1f2937;pointer-events:none;">${escapeHtml(name)}${escapeHtml(codePart)}</div>
+            <div style="font-size:12px;color:#6b7280;pointer-events:none;">${escapeHtml(categoryLabel)}${pricePart ? escapeHtml(pricePart) : ''}</div>
+          </div>
+        `;
+        })
+        .join('');
+    }
+
+    procedureDropdown.innerHTML = inner;
+    procedureDropdown.style.display = 'block';
+
+    const items = procedureDropdown.querySelectorAll('.procedure-dropdown-item');
+    items.forEach((item) => {
+      item.addEventListener('mouseenter', () => {
+        highlightedProcedureIndex = Number(item.dataset.idx);
+        // Just update highlight styles without re-rendering
+        items.forEach((el, i) => {
+          el.style.background = i === highlightedProcedureIndex ? '#eef4ff' : 'transparent';
+        });
+      });
+    });
+  };
+
+  function onProcedureDropdownPointerDown(e) {
+    const item = e.target.closest('.procedure-dropdown-item');
+    if (!item) return;
+    e.preventDefault();
+    e.stopPropagation();
+    if (procedureBlurCloseTimer) {
+      clearTimeout(procedureBlurCloseTimer);
+      procedureBlurCloseTimer = null;
+    }
+    const idx = Number(item.dataset.idx);
+    const filtered = getFilteredProcedures();
+    const selected = filtered[idx];
+    if (selected) {
+      handleProcedureSelect(selected);
+    }
+  }
+
+  const handleProcedureSelect = (item) => {
+    const displayName = getProcedureDisplayName(item);
+    const id = getProcedureId(item);
+
+    const inputEl = container.querySelector('#procedure_name');
+    if (!inputEl) return;
+    if (procedureBlurCloseTimer) {
+      clearTimeout(procedureBlurCloseTimer);
+      procedureBlurCloseTimer = null;
+    }
+    inputEl.value = displayName;
+    selectedProcedureId = id;
+    closeProcedureDropdown();
+  };
+
+  const openProcedureDropdown = () => {
+    isProcedureDropdownOpen = true;
+    highlightedProcedureIndex = 0;
+    renderProcedureDropdown();
+  };
+
+  if (procedureDropdown) {
+    procedureDropdown.addEventListener('mousedown', onProcedureDropdownPointerDown, true);
+  }
+
+  if (procedureInput) {
+    procedureInput.addEventListener('input', () => {
+      selectedProcedureId = null;
+      isProcedureDropdownOpen = true;
+      highlightedProcedureIndex = 0;
+      renderProcedureDropdown();
+      if (procedureStatus && serviceProducts?.length) {
+        const filtered = getFilteredProcedures();
+        procedureStatus.textContent = filtered.length ? `Showing ${filtered.length} matching procedures` : 'No match yet. Keep typing to add a custom value.';
+      }
+    });
+
+    procedureInput.addEventListener('focus', () => {
+      openProcedureDropdown();
+    });
+
+    procedureInput.addEventListener('blur', () => {
+      if (procedureBlurCloseTimer) clearTimeout(procedureBlurCloseTimer);
+      procedureBlurCloseTimer = setTimeout(() => {
+        procedureBlurCloseTimer = null;
+        closeProcedureDropdown();
+      }, 500);
+    });
+
+    procedureInput.addEventListener('keydown', (e) => {
+      const filtered = getFilteredProcedures();
+      if (!isProcedureDropdownOpen && ['ArrowDown', 'ArrowUp'].includes(e.key)) {
+        openProcedureDropdown();
+        return;
+      }
+
+      if (!isProcedureDropdownOpen || (!filtered.length && !serviceProductsLoading)) return;
+
+      switch (e.key) {
+        case 'ArrowDown':
+          e.preventDefault();
+          if (filtered.length) {
+            highlightedProcedureIndex = Math.min(filtered.length - 1, highlightedProcedureIndex + 1);
+            renderProcedureDropdown();
+          }
+          break;
+        case 'ArrowUp':
+          e.preventDefault();
+          if (filtered.length) {
+            highlightedProcedureIndex = Math.max(0, highlightedProcedureIndex - 1);
+            renderProcedureDropdown();
+          }
+          break;
+        case 'Enter':
+          if (filtered[highlightedProcedureIndex]) {
+            e.preventDefault();
+            handleProcedureSelect(filtered[highlightedProcedureIndex]);
+          }
+          break;
+        case 'Escape':
+          e.preventDefault();
+          closeProcedureDropdown();
+          break;
+        default:
+          break;
+      }
+    });
+  }
+
+  document.addEventListener('click', (e) => {
+    if (!procedureWrapper) return;
+    if (!procedureWrapper.contains(e.target)) {
+      closeProcedureDropdown();
+    }
+  });
+
+  renderProcedureDropdown();
 
   // Toggle advanced section visibility
   if (toggleAdvanced && advancedSection) {
@@ -1100,31 +1869,58 @@ function setupTreatmentForm(container) {
         return;
       }
 
+      const procedureNameValue = container.querySelector('#procedure_name').value.trim();
+      const resolvedProcedure =
+        selectedProcedureId !== null
+          ? selectedProcedureId
+          : getProcedureId(findProcedureByNameOrCode(procedureNameValue));
+
+      // Validate tooth number before submission
+      const toothNumber = container.querySelector('#tooth_number').value.trim();
+      const numberingSystem = container.querySelector('#numbering_system').value;
+      const toothValidation = validateAndGetToothInfo(toothNumber, numberingSystem);
+      
+      if (!toothValidation.valid) {
+        errorDiv.textContent = `Invalid tooth number: ${toothValidation.error}`;
+        errorDiv.style.display = 'block';
+        errorDiv.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+        return;
+      }
+
       // Build payload
       const payload = {
         visit: visitId,
-        tooth_number: container.querySelector('#tooth_number').value.trim(),
-        procedure_name: container.querySelector('#procedure_name').value.trim(),
+        tooth_number: toothNumber,
+        numbering_system: numberingSystem,
+        procedure_name: procedureNameValue,
         procedure_category: container.querySelector('#procedure_category').value,
         treatment_status: container.querySelector('#treatment_status').value,
         treatment_date: container.querySelector('#treatment_date').value
       };
 
-      // Optional fields
-      const numberingSystem = container.querySelector('#numbering_system').value;
-      if (numberingSystem && numberingSystem !== 'universal') {
-        payload.numbering_system = numberingSystem;
+      // Add auto-filled tooth information
+      if (toothValidation.toothInfo) {
+        const info = toothValidation.toothInfo;
+        if (info.name) payload.tooth_name = info.name;
+        if (info.type) payload.tooth_type = info.type;
+        if (info.position) payload.tooth_position = info.position;
+        if (info.quadrant) payload.quadrant = info.quadrant;
+        if (info.isPrimary !== undefined) payload.is_primary = info.isPrimary;
       }
 
-      const toothName = container.querySelector('#tooth_name')?.value.trim();
-      if (toothName) payload.tooth_name = toothName;
+      const activeVisit = summaryData?.active_visit;
+      if (activeVisit?.mode_of_payment === 'insurance') {
+        const pricelistId = activeVisit?.insurance_scheme?.pricelist_id;
+        if (pricelistId) {
+          payload.pricelist_id = pricelistId;
+        }
+      }
 
-      const toothType = container.querySelector('#tooth_type').value;
-      if (toothType) payload.tooth_type = toothType;
+      if (resolvedProcedure !== null && resolvedProcedure !== undefined) {
+        payload.procedure_product_id = resolvedProcedure;
+      }
 
-      const toothPosition = container.querySelector('#tooth_position').value;
-      if (toothPosition) payload.tooth_position = toothPosition;
-
+      // Optional fields from advanced section
       const surface = container.querySelector('#surface').value.trim();
       if (surface) payload.surface = surface;
 
@@ -1184,8 +1980,16 @@ function setupTreatmentForm(container) {
           treatmentDateInput.value = today;
         }
         followUpSection.style.display = 'none';
+        
+        // Clear auto-filled fields
+        toothNameInput.value = '';
+        toothTypeSelect.value = '';
+        toothPositionSelect.value = '';
+        quadrantInput.value = '';
+        toothNumberInput.style.borderColor = '#ddd';
+        toothNumberError.style.display = 'none';
+        updateToothNumberHint();
 
-        // Scroll to success message
         successDiv.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
 
       } catch (err) {
@@ -1263,7 +2067,6 @@ function renderSettings() {
   const content = overlay?.querySelector('#dentist-content');
   if (!content) return;
 
-  // Load current endpoint
   chrome.storage.local.get(['apiEndpoint'], (result) => {
     const currentEndpoint = result.apiEndpoint || 'http://192.168.1.169:5000';
 
@@ -1289,13 +2092,6 @@ function renderSettings() {
             <div id="dentist-endpoint-error" style="color: #c62828; font-size: 12px; margin-top: 5px; display: none;"></div>
             <div style="font-size: 12px; color: #666; margin-top: 5px;">
               Enter the base URL of your API server. Include the protocol (http:// or https://) and port if needed.
-              <br><br>
-              <strong>Examples:</strong>
-              <ul style="margin: 5px 0; padding-left: 20px;">
-                <li>http://localhost:8000</li>
-                <li>https://192.168.1.169:8000</li>
-                <li>https://api.example.com</li>
-              </ul>
             </div>
           </div>
           
@@ -1321,23 +2117,9 @@ function renderSettings() {
         <div id="dentist-settings-success" style="background: #e8f5e9; color: #2e7d32; padding: 12px; border-radius: 4px; margin-top: 16px; display: none; font-size: 13px;">
           Settings saved successfully!
         </div>
-        
-        <div style="background: #e3f2fd; border-left: 4px solid #2196F3; padding: 12px; margin-top: 16px; border-radius: 4px; font-size: 12px; color: #1565C0;">
-          <strong>ℹ️ About Certificate Errors</strong>
-          <p style="margin: 5px 0 0 0;">
-            If you're using HTTPS with a self-signed certificate and seeing "ERR_CERT_AUTHORITY_INVALID" errors:
-          </p>
-          <ul style="margin: 5px 0; padding-left: 20px;">
-            <li>Click the certificate error in your browser's address bar</li>
-            <li>Select "Advanced" and then "Proceed to [site] (unsafe)"</li>
-            <li>This will allow the browser to accept the certificate for this session</li>
-            <li>For production, use a valid SSL certificate from a trusted authority</li>
-          </ul>
-        </div>
       </div>
     `;
 
-    // Add form submit handler
     const form = content.querySelector('#dentist-settings-form');
     const endpointInput = content.querySelector('#dentist-api-endpoint');
     const errorDiv = content.querySelector('#dentist-endpoint-error');
@@ -1346,7 +2128,6 @@ function renderSettings() {
     const connectionStatus = content.querySelector('#dentist-connection-status');
     const backBtn = content.querySelector('#dentist-settings-back-btn');
 
-    // Back button handler
     backBtn.addEventListener('click', () => {
       if (summaryData) {
         renderTabs(content);
@@ -1355,15 +2136,11 @@ function renderSettings() {
       }
     });
 
-    // Test connection button handler
     testBtn.addEventListener('click', async () => {
       const endpoint = endpointInput.value.trim();
-
-      // Hide previous messages
       errorDiv.style.display = 'none';
       connectionStatus.style.display = 'none';
 
-      // Validate endpoint format
       if (!endpoint) {
         errorDiv.textContent = 'Please enter an API endpoint first';
         errorDiv.style.display = 'block';
@@ -1381,7 +2158,6 @@ function renderSettings() {
         return;
       }
 
-      // Show testing status
       testBtn.disabled = true;
       testBtn.textContent = 'Testing...';
       connectionStatus.style.display = 'block';
@@ -1393,39 +2169,18 @@ function renderSettings() {
         const baseUrl = endpoint.replace(/\/$/, '');
         const testUrl = `${baseUrl}/api/dental-appointments/summary/by-patient-uuid/test/`;
 
-        console.log('[API] Calling endpoint: GET', testUrl);
-        console.log('[Settings] Testing connection to:', testUrl);
         const response = await backgroundFetch(testUrl, {
           method: 'GET',
-          headers: {
-            'Content-Type': 'application/json',
-          }
+          headers: { 'Content-Type': 'application/json' }
         });
 
-        // If we get here, connection worked (even if 404, it means the server responded)
         connectionStatus.style.background = '#e8f5e9';
         connectionStatus.style.color = '#2e7d32';
         connectionStatus.innerHTML = '✅ Connection successful! The endpoint is reachable.';
-
       } catch (err) {
-        let statusMessage = '';
-        let statusColor = '#c62828';
-        let statusBg = '#ffebee';
-
-        if (err.message.includes('Failed to fetch') || err.message.includes('ERR_CERT_AUTHORITY_INVALID')) {
-          statusMessage = '❌ Certificate error detected. You need to accept the certificate in your browser first.';
-          statusMessage += '<br><br><strong>Solution:</strong> Open <a href="' + endpoint + '" target="_blank" style="color: #00695C; text-decoration: underline;">' + endpoint + '</a> in a new tab, accept the certificate warning, then try again.';
-        } else if (err.message.includes('CORS')) {
-          statusMessage = '⚠️ CORS error: The server may not allow requests from this origin.';
-        } else if (err.message.includes('ERR_CONNECTION_REFUSED')) {
-          statusMessage = '❌ Connection refused. Check if the server is running and the URL is correct.';
-        } else {
-          statusMessage = '❌ Connection failed: ' + err.message;
-        }
-
-        connectionStatus.style.background = statusBg;
-        connectionStatus.style.color = statusColor;
-        connectionStatus.innerHTML = statusMessage;
+        connectionStatus.style.background = '#ffebee';
+        connectionStatus.style.color = '#c62828';
+        connectionStatus.innerHTML = '❌ Connection failed: ' + err.message;
       } finally {
         testBtn.disabled = false;
         testBtn.textContent = 'Test Connection';
@@ -1434,33 +2189,28 @@ function renderSettings() {
 
     form.addEventListener('submit', (e) => {
       e.preventDefault();
-
       const endpoint = endpointInput.value.trim();
 
-      // Hide previous messages
       errorDiv.style.display = 'none';
       successDiv.style.display = 'none';
 
-      // Validate endpoint
       if (!endpoint) {
         errorDiv.textContent = 'Please enter an API endpoint';
         errorDiv.style.display = 'block';
         return;
       }
 
-      // Basic URL validation
       try {
         const url = new URL(endpoint);
         if (!['http:', 'https:'].includes(url.protocol)) {
           throw new Error('Protocol must be http:// or https://');
         }
       } catch (err) {
-        errorDiv.textContent = 'Please enter a valid URL (e.g., http://localhost:8000 or https://192.168.1.169:8000)';
+        errorDiv.textContent = 'Please enter a valid URL';
         errorDiv.style.display = 'block';
         return;
       }
 
-      // Save to storage
       chrome.storage.local.set({ apiEndpoint: endpoint }, () => {
         if (chrome.runtime.lastError) {
           errorDiv.textContent = 'Error saving settings: ' + chrome.runtime.lastError.message;
@@ -1471,9 +2221,7 @@ function renderSettings() {
             successDiv.style.display = 'none';
           }, 3000);
 
-          // Optionally reload the patient data with new endpoint
           if (currentPatient) {
-            console.log('Settings saved, reloading patient data with new endpoint...');
             setTimeout(() => {
               renderOverlayForPatient();
             }, 500);
@@ -1489,6 +2237,5 @@ function renderSettings() {
 // =========================
 
 loadAuthTokens();
-
 extractPatient();
 setInterval(extractPatient, 2000);
