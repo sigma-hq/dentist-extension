@@ -1338,7 +1338,7 @@ function renderTreatmentsTab(data) {
             <div>
               <label style="display:block;margin-bottom:4px;font-size:12px;font-weight:500;color:#333;">Procedure Name *</label>
               <div id="procedure_input_wrapper" style="position:relative;">
-                <input type="text" id="procedure_name" autocomplete="off" required placeholder="Search or type a procedure" style="width:100%;padding:8px;border:1px solid #ddd;border-radius:4px;font-size:13px;box-sizing:border-box;height:36px;background:#fff;outline:none;" />
+                <input type="text" id="procedure_name" autocomplete="off" required placeholder="Search and select a procedure" style="width:100%;padding:8px;border:1px solid #ddd;border-radius:4px;font-size:13px;box-sizing:border-box;height:36px;background:#fff;outline:none;" />
                 <div id="procedure_input_spinner" style="display:none;position:absolute;right:10px;top:50%;transform:translateY(-50%);width:16px;height:16px;border:2px solid #e0e0e0;border-top-color:#00695C;border-radius:50%;animation:spin 0.9s linear infinite;"></div>
                 <div id="procedure_dropdown" style="display:none;position:absolute;z-index:10000;top:40px;left:0;width:100%;background:#fff;border:1px solid #e5e7eb;box-shadow:0 8px 22px rgba(0,0,0,0.12);border-radius:6px;max-height:260px;overflow-y:auto;">
                 </div>
@@ -1665,7 +1665,7 @@ function setupTreatmentForm(container) {
     } else if (filtered.length === 0) {
       inner = `
         <div style="padding:12px;font-size:12px;color:#666;">
-          No procedures found. Continue typing to add a custom name.
+          No matching procedures. Select one from the list above.
         </div>
       `;
     } else {
@@ -1767,7 +1767,7 @@ function setupTreatmentForm(container) {
       renderProcedureDropdown();
       if (procedureStatus && serviceProducts?.length) {
         const filtered = getFilteredProcedures();
-        procedureStatus.textContent = filtered.length ? `Showing ${filtered.length} matching procedures` : 'No match yet. Keep typing to add a custom value.';
+        procedureStatus.textContent = filtered.length ? `Showing ${filtered.length} matching procedures` : 'No match. Type to search, then select from the list.';
       }
     });
 
@@ -1874,6 +1874,13 @@ function setupTreatmentForm(container) {
         selectedProcedureId !== null
           ? selectedProcedureId
           : getProcedureId(findProcedureByNameOrCode(procedureNameValue));
+
+      if (resolvedProcedure === null || resolvedProcedure === undefined) {
+        errorDiv.textContent = 'Please select a procedure from the list.';
+        errorDiv.style.display = 'block';
+        container.querySelector('#procedure_input_wrapper')?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+        return;
+      }
 
       // Validate tooth number before submission
       const toothNumber = container.querySelector('#tooth_number').value.trim();
