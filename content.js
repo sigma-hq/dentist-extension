@@ -486,29 +486,39 @@ function escapeHtml(value) {
 // Service products (procedure list)
 // =========================
 
+const PROCEDURES_LOG_PREFIX = '[Sigma Dental - Procedures]';
+
 function ensureServiceProductsFetching() {
   if (!serviceProductsFetchPromise) {
+    console.log(PROCEDURES_LOG_PREFIX, 'Starting procedures fetch (new request)');
     serviceProductsFetchPromise = fetchServiceProducts();
+  } else {
+    console.log(PROCEDURES_LOG_PREFIX, 'Reusing in-flight procedures fetch');
   }
   return serviceProductsFetchPromise;
 }
 
 async function fetchServiceProducts() {
+  console.log(PROCEDURES_LOG_PREFIX, 'fetchServiceProducts() started');
   serviceProductsLoading = true;
   refreshProcedureOptions();
 
   try {
     const baseUrl = await getApiEndpoint();
     const url = `${baseUrl}/api/products/dental/?page_size=100`;
+    console.log(PROCEDURES_LOG_PREFIX, 'API endpoint:', baseUrl, '| URL:', url);
 
     const allItems = [];
     let nextUrl = url;
+    let pageNum = 1;
 
     while (nextUrl) {
+      console.log(PROCEDURES_LOG_PREFIX, `Fetching page ${pageNum}:`, nextUrl);
       const response = await authenticatedFetch(nextUrl, { method: 'GET' });
 
       if (!response.ok) {
         const errorBody = await response.json().catch(() => ({}));
+        console.error(PROCEDURES_LOG_PREFIX, 'API error:', response.status, errorBody);
         throw new Error(errorBody.detail || errorBody.message || `Failed to load dental products (HTTP ${response.status})`);
       }
 
@@ -520,26 +530,37 @@ async function fetchServiceProducts() {
         (Array.isArray(data?.data) && data.data) ||
         (Array.isArray(data?.data?.results) && data.data.results) ||
         [];
-      if (items.length) {
+      const count = items.length;
+      if (count) {
         allItems.push(...items);
       }
+      console.log(PROCEDURES_LOG_PREFIX, `Page ${pageNum}: received ${count} items, total so far: ${allItems.length}`);
 
       const nextValue = data?.next ?? data?.data?.next ?? null;
       if (typeof nextValue === 'string' && nextValue.length > 0) {
-        nextUrl = nextValue.startsWith('http')
-          ? nextValue
-          : `${baseUrl}${nextValue.startsWith('/') ? '' : '/'}${nextValue}`;
+        if (nextValue.startsWith('http')) {
+          // Use same scheme/origin as baseUrl so we don't switch http <-> https (API may return wrong scheme)
+          const baseOrigin = new URL(baseUrl).origin;
+          const parsed = new URL(nextValue);
+          nextUrl = baseOrigin + parsed.pathname + parsed.search;
+        } else {
+          nextUrl = `${baseUrl}${nextValue.startsWith('/') ? '' : '/'}${nextValue}`;
+        }
+        pageNum += 1;
       } else {
         nextUrl = null;
       }
     }
 
     serviceProducts = allItems;
+    console.log(PROCEDURES_LOG_PREFIX, 'Fetch complete. Total procedures:', allItems.length);
     refreshProcedureOptions();
   } catch (err) {
+    console.error(PROCEDURES_LOG_PREFIX, 'Fetch failed:', err?.message ?? err);
     serviceProductsFetchPromise = null;
   } finally {
     serviceProductsLoading = false;
+    console.log(PROCEDURES_LOG_PREFIX, 'fetchServiceProducts() finished, loading=', serviceProductsLoading);
     refreshProcedureOptions();
   }
 }
@@ -556,17 +577,20 @@ function refreshProcedureOptions(scope) {
   };
 
   if (serviceProductsLoading) {
+    console.log(PROCEDURES_LOG_PREFIX, 'refreshProcedureOptions: showing loading state');
     if (listEl) listEl.innerHTML = '';
     setStatus('Loading dental procedures...');
     return;
   }
 
   if (!serviceProducts || !serviceProducts.length) {
+    console.log(PROCEDURES_LOG_PREFIX, 'refreshProcedureOptions: no procedures (empty or not loaded)');
     if (listEl) listEl.innerHTML = '';
     setStatus('No dental procedures loaded yet.');
     return;
   }
 
+  console.log(PROCEDURES_LOG_PREFIX, 'refreshProcedureOptions: rendering', serviceProducts.length, 'procedures');
   if (listEl) {
     const optionsHtml = serviceProducts
       .map((item) => {
